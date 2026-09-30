@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fast CI: unit tests + app/test APK builds. Skip once with: git commit --no-verify
+exec pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci.ps1

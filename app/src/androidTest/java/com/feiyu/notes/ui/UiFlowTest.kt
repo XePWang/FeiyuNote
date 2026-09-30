@@ -1,0 +1,422 @@
+package com.feiyu.notes.ui
+
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.core.content.FileProvider
+import androidx.core.content.IntentCompat
+import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso
+import androidx.test.espresso.intent.Intents
+import androidx.test.espresso.intent.Intents.intended
+import androidx.test.espresso.intent.Intents.intending
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.feiyu.notes.FeiyuApp
+import com.feiyu.notes.MainActivity
+import com.feiyu.notes.ai.AiConfig
+import com.feiyu.notes.ai.AiInput
+import com.feiyu.notes.ai.AiReply
+import com.feiyu.notes.data.EntryKind
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+import java.util.Collections
+
+/**
+ * End-to-end UI flows replacing the manual emulator checks. Runs against an isolated test
+ * environment (own DB, image root, prefs, fake model); camera, gallery, save and share are stubbed.
+ */
+@RunWith(AndroidJUnit4::class)
+class UiFlowTest {
+    @get:Rule val compose = createEmptyComposeRule()
+
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val app = instrumentation.targetContext.applicationContext as FeiyuApp
+    private val localeManager = app.getSystemService(android.app.LocaleManager::class.java)
+    private lateinit var originalLocales: android.os.LocaleList
+    private val root = File(app.filesDir, "ui-test")
+    private val inputs: MutableList<AiInput> = Collections.synchronizedList(mutableListOf())
+    private var scenario: ActivityScenario<MainActivity>? = null
+
+    private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { _, input ->
+        inputs += input
+        if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
+    }
+
+    @Before fun setUp() {
+        originalLocales = localeManager.applicationLocales
+        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("zh-CN")
+        app.deleteDatabase(FeiyuApp.TEST_DATABASE)
+        app.getSharedPreferences(FeiyuApp.TEST_PREFS, 0).edit().clear().commit()
+        root.deleteRecursively()
+        app.installTestEnvironment(root, fakeModel)
+        Intents.init()
+        launch()
+    }
+
+    @After fun tearDown() {
+        scenario?.close()
+        localeManager.applicationLocales = originalLocales
+        Intents.release()
+        shell("wm size reset")
+        app.restoreProductionEnvironment()
+        app.deleteDatabase(FeiyuApp.TEST_DATABASE)
+        root.deleteRecursively()
+    }
+
+    // ---- flows ----
+
+    @Test fun courseFlowAskFollowUpExpandSummarizeEditExport() {
+        createNotebook("新建课程", "高数")
+        click("高数")
+        click("新课次")
+        ask("什么是极限")
+        awaitAnswer("答案1")
+
+        clickNth("追问", 0)
+        ask("再举个例子")
+        awaitAnswer("答案2")
+        assertEquals(listOf("什么是极限", "答案1", "再举个例子"), inputs.last().messages.map { it.text })
+
+        clickNth("展开讲解", 0)
+        compose.onNodeWithTag("send").performClick()
+        awaitAnswer("答案3")
+
+        click("整理本课")
+        click("开始整理")
+        awaitAnswer("笔记正文")
+        assertTrue("summary is text only", inputs.last().messages.all { it.images.isEmpty() })
+
+        // Note: edit, save, export (stubbed save dialog) and share (stubbed chooser).
+        click("笔记正文")
+        compose.onNodeWithTag("note-editor").performTextClearance()
+        compose.onNodeWithTag("note-editor").performTextInput("改过的笔记 <b>")
+        click("保存")
+        waitText("已保存")
+        val exported = File(app.cacheDir, "exports/test-export.html").apply { parentFile!!.mkdirs(); delete(); createNewFile() }
+        intending(hasAction(Intent.ACTION_CREATE_DOCUMENT)).respondWith(
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(providerUri(exported)))
+        )
+        click("导出 HTML")
+        waitText("已导出")
+        val html = exported.readText()
+        assertTrue(html.contains("改过的笔记 &lt;b&gt;") && !html.contains("<script"))
+        intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
+        click("分享")
+        compose.waitForIdle()
+        intended(hasAction(Intent.ACTION_CHOOSER))
+
+        // Cold start returns to the last lesson.
+        scenario?.close()
+        launch()
+        awaitAnswer("答案1")
+        compose.onNodeWithTag("composer-input").assertExists()
+    }
+
+    @Test fun cameraAndGalleryPhotosAreAttachedAndSent() {
+        createNotebook("新建课程", "物理")
+        click("物理")
+        click("新课次")
+
+        // Camera cancelled: no attachment, no request.
+        intending(hasAction(MediaStore.ACTION_IMAGE_CAPTURE)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null))
+        click("拍照")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("照片").assertDoesNotExist()
+
+        // Camera succeeds: the stub writes a PNG to the requested output URI.
+        intending(hasAction(MediaStore.ACTION_IMAGE_CAPTURE)).respondWithFunction { intent ->
+            val out = IntentCompat.getParcelableExtra(intent, MediaStore.EXTRA_OUTPUT, Uri::class.java)!!
+            app.contentResolver.openOutputStream(out)!!.use { testBitmap(Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }
+            Instrumentation.ActivityResult(Activity.RESULT_OK, null)
+        }
+        click("拍照")
+        waitDescription("照片")
+        compose.onNodeWithTag("send").performClick()
+        awaitAnswer("答案1")
+        assertEquals(1, inputs.last().messages.last().images.size)
+
+        // Gallery: the picked image is copied into the notebook's image dir.
+        val picked = File(app.cacheDir, "exports/picked.png").apply { parentFile!!.mkdirs() }
+        picked.outputStream().use { testBitmap(Color.BLUE).compress(Bitmap.CompressFormat.PNG, 100, it) }
+        intending(hasAction(MediaStore.ACTION_PICK_IMAGES)).respondWith(
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(providerUri(picked)))
+        )
+        click("相册")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("移除").fetchSemanticsNodes().isNotEmpty() }
+        ask("这张图是什么颜色")
+        awaitAnswer("答案2")
+        val sent = inputs.last().messages.last()
+        assertEquals(1, sent.images.size)
+        assertTrue("copied into the private image root", sent.images.single().path.startsWith(File(root, "images").path))
+        val photos = runBlocking { app.store.readEntries(app.store.listLessons(app.store.listNotebooks().single().id).single().id) }
+            .filter { it.kind == EntryKind.USER }.mapNotNull { it.imagePath }
+        assertEquals(2, photos.size)
+    }
+
+    @Test fun practiceBookMasteryAndMistakeOnlyInPractice() {
+        createNotebook("新建课程", "线代")
+        createNotebook("新建刷题本", "线代错题", linkCourse = "线代")
+        compose.onNodeWithText("关联课程：线代").assertExists()
+
+        click("线代错题")
+        click("新章节/试卷")
+        ask("求矩阵的逆")
+        awaitAnswer("答案1")
+        click("未掌握")
+        waitText("已掌握")
+        clickNth("错题讲解", 0)
+        ask("我算出来是单位阵")
+        awaitAnswer("答案2")
+        assertTrue(inputs.last().messages.last().text.contains("我算出来是单位阵"))
+
+        // A course lesson has neither mastery nor the mistake action.
+        systemBack()
+        systemBack()
+        click("线代")
+        click("新课次")
+        ask("行列式")
+        awaitAnswer("答案3")
+        compose.onNodeWithText("错题讲解").assertDoesNotExist()
+        compose.onNodeWithText("未掌握").assertDoesNotExist()
+    }
+
+    @Test fun defaultTemplateAppliesToQuestionsNotSummaries() {
+        click("设置")
+        click("讲解模板")
+        click("新建")
+        compose.onNodeWithTag("text-input").performTextInput("严格")
+        compose.onNodeWithTag("template-instruction").performTextInput("每步写出依据")
+        click("确定")
+        waitText("严格")
+        systemBack()
+        systemBack()
+
+        createNotebook("新建课程", "概率", defaultTemplate = "严格")
+        click("概率")
+        click("新课次")
+        ask("什么是条件概率")
+        awaitAnswer("答案1")
+        assertTrue(inputs.last().systemText.contains("每步写出依据"))
+        click("整理本课")
+        click("开始整理")
+        awaitAnswer("笔记正文")
+        assertTrue("default template not used for summaries", !inputs.last().systemText.contains("每步写出依据"))
+    }
+
+    @Test fun archiveRestoreAndDeleteThread() {
+        createNotebook("新建课程", "化学")
+        click("化学")
+        click("新课次")
+        ask("第一问")
+        awaitAnswer("答案1")
+        ask("第二问")
+        awaitAnswer("答案2")
+
+        compose.onNodeWithTag("chat-list").performScrollToNode(hasText("第一问"))
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("归档")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("第一问").fetchSemanticsNodes().isEmpty() }
+        click("已归档")
+        waitText("第一问")
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("恢复")
+        systemBack()
+        waitText("第一问")
+
+        compose.onNodeWithTag("chat-list").performScrollToNode(hasText("第一问"))
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("删除整条问答")
+        click("删除")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("第一问").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText("第二问").assertExists()
+    }
+
+    @Test fun layoutAdaptsToWindowWidthAndKeepsDraft() {
+        createNotebook("新建课程", "英语")
+        click("英语")
+        click("新课次")
+        compose.onNodeWithTag("composer-input").performTextInput("草稿不丢")
+
+        shell("wm size 2076x2152")
+        waitText("新课次") // list pane visible next to the lesson
+        compose.onNodeWithTag("composer-input").assertExists()
+
+        shell("wm size 1080x2300")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("新课次").fetchSemanticsNodes().isEmpty() }
+        compose.onNode(hasSetTextAction() and hasText("草稿不丢")).assertExists()
+    }
+
+    @Test fun sessionAvatarAndCustomPhotoSurviveRecreation() {
+        createNotebook("新建课程", "头像测试")
+        click("头像测试")
+        click("新课次")
+        ask("头像保持一致")
+        awaitAnswer("答案1")
+        waitDescription("DeepSeek 头像")
+        val lesson = app.prefs.lastLesson!!.second
+        val index = app.prefs.avatarIndex(lesson, WhalePortraits.size)
+        scenario!!.recreate()
+        waitDescription("DeepSeek 头像")
+        assertEquals(index, app.prefs.avatarIndex(lesson, WhalePortraits.size))
+        systemBack()
+        systemBack()
+        click("设置")
+        val picked = File(app.cacheDir, "exports/avatar.png").apply { parentFile!!.mkdirs() }
+        picked.outputStream().use { testBitmap(Color.CYAN).compress(Bitmap.CompressFormat.PNG, 100, it) }
+        intending(hasAction(MediaStore.ACTION_PICK_IMAGES)).respondWith(
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(providerUri(picked)))
+        )
+        compose.onNodeWithTag("choose-avatar").performScrollTo().performClick()
+        waitText("头像已更新")
+        assertTrue(app.avatars.file.isFile)
+        scenario!!.recreate()
+        compose.onNodeWithTag("reset-avatar").performScrollTo().performClick()
+        waitText("已恢复每个课次的随机头像")
+        assertTrue(!app.avatars.file.exists())
+        assertEquals(index, app.prefs.avatarIndex(lesson, WhalePortraits.size))
+    }
+
+    @Test fun nonChineseLanguageUsesEnglishAndChineseUsesChinese() {
+        // A German primary language must not pick Chinese from the secondary preference.
+        scenario!!.close()
+        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("de-DE,zh-CN")
+        launch()
+        waitText("Feiyu Notes")
+        click("New course")
+        compose.onNodeWithTag("notebook-name").performTextInput("Calculus")
+        click("Confirm")
+        click("Calculus")
+        click("New session")
+        ask("Explain a limit")
+        awaitAnswer("答案1")
+        assertTrue(inputs.last().systemText.contains("Respond in English"))
+        compose.onNodeWithTag("send").assertIsDisplayed()
+        shell("wm size 1080x2300")
+        screenshot("chat-en-phone")
+        scenario!!.close()
+        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("zh-TW")
+        launch()
+        waitText("发送")
+        waitDescription("DeepSeek 头像")
+        screenshot("chat-zh-phone")
+    }
+
+    private fun screenshot(name: String) {
+        compose.waitForIdle()
+        // Compose idleness does not include the system Activity/window transition.
+        Thread.sleep(800)
+        val dir = File(app.getExternalFilesDir(null), "ui-evidence").apply { mkdirs() }
+        instrumentation.uiAutomation.takeScreenshot().let { image ->
+            File(dir, "$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            image.recycle()
+        }
+    }
+
+    // ---- helpers ----
+
+    private fun launch() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        compose.waitForIdle()
+    }
+
+    private fun createNotebook(button: String, name: String, linkCourse: String? = null, defaultTemplate: String? = null) {
+        click(button)
+        compose.onNodeWithTag("notebook-name").performTextInput(name)
+        linkCourse?.let { clickLast(it) } // the dialog's chip, not the list row behind it
+        defaultTemplate?.let { click(it) }
+        click("确定")
+        waitText(name)
+    }
+
+    private fun ask(text: String) {
+        compose.onNodeWithTag("composer-input").performTextInput(text)
+        compose.onNodeWithTag("send").performClick()
+    }
+
+    private fun click(text: String) {
+        waitText(text)
+        compose.onAllNodes(hasText(text) or hasContentDescription(text))[0].performClick()
+        compose.waitForIdle()
+    }
+
+    private fun clickLast(text: String) {
+        waitText(text)
+        compose.onAllNodesWithText(text).let { it[it.fetchSemanticsNodes().size - 1] }.performClick()
+        compose.waitForIdle()
+    }
+
+    /** A real BACK key event, routed like the system back gesture. */
+    private fun systemBack() {
+        scenario!!.onActivity { activity ->
+            androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+        }
+        compose.waitUntil(5_000) {
+            var visible = false
+            scenario!!.onActivity { activity ->
+                visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+            }
+            !visible
+        }
+        Espresso.pressBack()
+        compose.waitForIdle()
+    }
+
+    /** The reply is on screen and the single generation slot is free again. */
+    private fun awaitAnswer(text: String) {
+        waitText(text)
+        compose.waitUntil(10_000) { app.generator.status.value.running == null }
+    }
+
+    private fun clickNth(text: String, index: Int) {
+        waitText(text)
+        compose.onAllNodesWithText(text)[index].performClick()
+        compose.waitForIdle()
+    }
+
+    private fun waitText(text: String) =
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun waitDescription(text: String) =
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun providerUri(file: File): Uri = FileProvider.getUriForFile(app, "${app.packageName}.photos", file)
+
+    private fun testBitmap(color: Int): Bitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+
+    private fun shell(command: String) {
+        instrumentation.uiAutomation.executeShellCommand(command).close()
+        Thread.sleep(1_500)
+        compose.waitForIdle()
+    }
+}

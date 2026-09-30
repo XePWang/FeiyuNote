@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Camera writes photos straight into files/images/<notebookId>/. -->
+    <files-path name="photos" path="images/" />
+    <!-- Isolated image root used only by instrumented UI tests (FeiyuApp.installTestEnvironment). -->
+    <files-path name="test_photos" path="ui-test/images/" />
+    <!-- Exported HTML handed to the share sheet. -->
+    <cache-path name="exports" path="exports/" />
+</paths>

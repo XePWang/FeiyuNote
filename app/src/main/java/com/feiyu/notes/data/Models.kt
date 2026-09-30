@@ -1,0 +1,63 @@
+package com.feiyu.notes.data
+
+/** App-owned data types mirroring spec §5. Stored as lowercase strings in SQLite. */
+
+enum class NotebookKind { COURSE, PRACTICE }
+
+data class Notebook(
+    val id: Long,
+    val kind: NotebookKind,
+    val name: String,
+    /** Practice books only: the optional linked course. */
+    val linkedCourseId: Long?,
+    val defaultTemplateId: Long?,
+    val createdAt: Long,
+)
+
+data class Lesson(
+    val id: Long,
+    val notebookId: Long,
+    val title: String,
+    val createdAt: Long,
+)
+
+enum class EntryKind { USER, ASSISTANT, NOTE }
+
+/** User entries only; summaries never create a user entry. */
+enum class EntryAction { ASK, EXPAND, MISTAKE }
+
+/** Assistant entries only. */
+enum class EntryState { PENDING, COMPLETE, FAILED, CANCELLED, INTERRUPTED }
+
+/** Root user entries in practice books only. */
+enum class Mastery { UNMASTERED, MASTERED }
+
+data class Entry(
+    val id: Long,
+    val lessonId: Long,
+    val kind: EntryKind,
+    val action: EntryAction? = null,
+    val text: String,
+    val parentEntryId: Long? = null,
+    /** note: summarized entries; user: the selected reference note. */
+    val sourceEntryIds: List<Long> = emptyList(),
+    /** File name inside the notebook's image directory. */
+    val imagePath: String? = null,
+    /** User entries whose photos were attached to this follow-up. */
+    val attachedImageEntryIds: List<Long> = emptyList(),
+    /** Template actually used; may dangle after the template is deleted. */
+    val templateId: Long? = null,
+    val state: EntryState? = null,
+    val archived: Boolean = false,
+    val mastery: Mastery? = null,
+    val createdAt: Long = 0,
+) {
+    val isRoot: Boolean get() = kind == EntryKind.USER && parentEntryId == null
+}
+
+data class Template(
+    val id: Long,
+    val name: String,
+    val instruction: String,
+    val createdAt: Long,
+)

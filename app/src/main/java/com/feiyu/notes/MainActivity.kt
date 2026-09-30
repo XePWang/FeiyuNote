@@ -1,0 +1,43 @@
+package com.feiyu.notes
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.navigation3.runtime.NavKey
+import com.feiyu.notes.ui.AppNavigation
+import com.feiyu.notes.ui.LessonKey
+import com.feiyu.notes.ui.LessonListKey
+import com.feiyu.notes.ui.NotebookListKey
+import com.feiyu.notes.ui.theme.FeiyuTheme
+import kotlinx.coroutines.runBlocking
+
+class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(com.feiyu.notes.settings.AppLanguage.context(newBase))
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        // A restored back stack wins over this; it only seeds a cold start.
+        // ponytail: one indexed row lookup on the main thread at cold start; move behind a splash if it ever shows up in startup traces.
+        val initial = if (savedInstanceState == null) runBlocking { startStack() } else listOf(NotebookListKey)
+        setContent {
+            FeiyuTheme {
+                AppNavigation(initial)
+            }
+        }
+    }
+
+    /** Reopens the last lesson if it still exists; otherwise the notebook list (spec §5 失效引用). */
+    private suspend fun startStack(): List<NavKey> {
+        val (notebookId, lessonId) = app.prefs.lastLesson ?: return listOf(NotebookListKey)
+        val lesson = app.store.getLesson(lessonId)
+        if (lesson == null || lesson.notebookId != notebookId) {
+            app.prefs.clearLastLesson()
+            return listOf(NotebookListKey)
+        }
+        return listOf(NotebookListKey, LessonListKey(notebookId), LessonKey(notebookId, lessonId))
+    }
+}
