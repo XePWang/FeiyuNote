@@ -167,6 +167,10 @@ P2/P3 各自定义自己的类型，不再等待 P1 固定数据模型；它们�
 - 开源约定：代码 GPL-3.0-or-later；素材独立署名；中文 README 为默认并链接英文版，接受 Issue 和功能建议，暂不接受 PR。GitHub main 构建 debug APK，v* 标签使用仓库 Secrets 签名 release APK 并发布预览版。
 - 提示词已加强纯文本约束；历史回答中的 Markdown 标记不自动改写。
 
-本次计划不包含模型效果评测、真实计费请求、发布仓库、上架、部署服务器或联系内测人员。
+本次计划不包含模型效果评测、真实计费请求、上架、部署服务器或联系内测人员。开源仓库与预览版发布由用户于 2026-10-01 追加授权，见界面与发布补充记录。
 
 - UI 补充验收（2026-10-01）：`pwsh -NoProfile -File scripts/ci.ps1 -Full` 通过；JVM 单测 14 项，仪器/界面 runner 报告 OK (26 tests)，真实 API 冒烟默认跳过。新增覆盖每课次头像稳定、自定义头像导入/恢复、主语言为德语且次语言为中文时使用英语、主语言为中文时使用中文。截图随 CI 输出到 `build/ci/screenshots/`。修复了列表懒加载后的测试定位、重建后的键盘关闭等待，以及可变字体默认字重过细。
+
+- 发布构建（2026-10-01）：本地 `assembleRelease --no-configuration-cache` 和 `lintVitalRelease` 通过，签名 APK 约 22 MB；[GitHub main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36784905890) 的单元测试、debug 编译与 APK 上传通过。首次远端失败来自 SDK 安装 action 请求已移除的 tools 包，已改为 platform-tools。备用机 PHP110 在安装前断开，未进行真机验收。
+
+- [v0.1.0-alpha.1 发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36785654962) 成功：标签 `9fd23ea` 的代码在 GitHub 构建并签名，APK 已上传 [Release](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)，为非草稿预览版。签名密钥保留于仓库外并以 GitHub Secrets 提供，未提交到仓库。后续本次提交只更新验收文档，沿用已通过的检查。

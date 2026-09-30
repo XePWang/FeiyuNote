@@ -4,15 +4,21 @@
 
 ## Next actions
 
-- **发布首次预览版** — UI 与中英界面已实现，代码许可选定 GPL-3.0-or-later；本地 CI、备用机检查与 GitHub 发布流程收尾中。目标仓库 `Yongzhaooo/FeiyuNote`。签名备份保存在仓库外 `../肥鱼笔记-private/signing/`，不要提交。
-- **回答中的 Markdown 加粗残留** — 真实调用中模型偶尔输出 `**…**`，普通文本界面会原样显示；新请求已加强纯文本约束；若仍有问题，再考虑显示/导出前去除强调标记，入口 `app/src/main/java/com/feiyu/notes/study/StudyPrompts.kt`，改后补 ContextBuilder/NoteExporter 单测并跑 `pwsh scripts/ci.ps1 -Full`。
+- **回答中的 Markdown 加粗残留** — Generator 已为新请求加入纯文本指令，历史回答不自动改写。若仍有反馈，再考虑显示/导出处理；入口为 `Generator.kt` 与 `NoteExporter.kt`，验证走既有本地 CI。
 - **未发送照片的孤儿文件** — 拍照或选图后未发送即被强杀时，图片留在 `files/images/<notebookId>/` 无引用；决定是否在启动时清理（spec 未要求，需先定范围）。
 
 ## Waiting
 
+**备用机基础检查** — PHP110 在安装前从 ADB 断开，尚未在真机安装或运行本版；clearing: 重新连接并授权 USB 调试；supplier: 用户。
+
 **真实折叠态验收** — 模拟器 `device_state` 切到 CLOSED 后外屏黑屏，折叠与铰链遮挡目前由界面测试中的宽窄窗口切换代替；clearing: 可用的折叠真机或能正常折叠的模拟器镜像；supplier: 用户。
 
 ## Done (rolling)
+
+- **首次预览版（2026-10-01）** — [v0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1) 已发布，约 22 MB 签名 APK 可直接下载；[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36785654962) 完成编译、签名与上传。标签指向 `9fd23ea`。
+
+- **UI 与中英界面（2026-10-01）** — 02-01 图标、鲸鱼主题、Noto Sans SC、课次随机头像/自定义头像、API Key 指引已实现；完整本地 CI 通过，证据见 [plan](plan.md#执行记录)。
+- **开源与构建（2026-10-01）** — 代码采用 GPL-3.0-or-later，素材独立署名。已推送 [Yongzhaooo/FeiyuNote](https://github.com/Yongzhaooo/FeiyuNote)，中文 README 链接英文版；接受 Issue 与功能建议，暂不接受 PR。[主分支 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36784905890) 已通过。签名备份位于仓库外 `../肥鱼笔记-private/signing/`，不要提交。
 
 - **本地 CI/CD（2026-09-30）** — `pwsh scripts/ci.ps1 [-Full]`：单元测试 14 项 + 模拟器仪器/界面测试 24 项全部通过，产物输出到 `dist/`；界面自动化替代了此前的人工截图验收，并修复了双栏返回键直接退出等 4 个缺陷。证据见 [plan 执行记录](plan.md#执行记录)。
 - **相册导入（2026-09-30）** — 系统照片选择器选图，复制进私有目录并确认可解码后才作为附件；界面测试打桩验证。
