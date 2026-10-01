@@ -24,6 +24,10 @@ import com.feiyu.notes.R
 import com.feiyu.notes.app
 import com.feiyu.notes.ai.AiDefaults
 import com.feiyu.notes.settings.ApiSettings
+import com.feiyu.notes.settings.UiLanguage
+import com.feiyu.notes.settings.ThemeMode
+import com.feiyu.notes.settings.TextSize
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,6 +50,8 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
     // Credentials stay in memory; never put a typed key in saved-instance-state.
     var newKey by remember { mutableStateOf("") }
     var model by rememberSaveable { mutableStateOf(settings.model()) }
+    var effort by rememberSaveable { mutableStateOf(settings.effort()) }
+    val models by settings.models.collectAsStateWithLifecycle()
     var saved by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -58,7 +64,7 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    settings.save(key, selectedModel)
+                    settings.save(key, selectedModel, effort)
                     settings.hasKey()
                 }
             }.onSuccess {
@@ -86,6 +92,7 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
                 Modifier.widthIn(max = 640.dp).fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
+                DisplaySettings()
                 OutlinedButton(onClick = onOpenTemplates, modifier = Modifier.fillMaxWidth()) { Text(context.getString(R.string.templates)) }
                 SettingsSection(context.getString(R.string.deepseek_connection)) {
                     Text(context.getString(if (hasKey) R.string.key_configured else R.string.key_missing), style = MaterialTheme.typography.titleSmall)
@@ -100,12 +107,10 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                         modifier = Modifier.fillMaxWidth().testTag("api-key"),
                     )
-                    OutlinedTextField(
-                        enabled = !saving,
-                        value = model, onValueChange = { model = it; saved = false },
-                        label = { Text(context.getString(R.string.model_name, AiDefaults.MODEL)) },
-                        singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    )
+                    ModelChoiceFields(com.feiyu.notes.ai.ModelChoice(model, effort), {
+                        model = it.model; effort = it.effort; saved = false
+                    }, models, enabled = !saving)
+                    ConnectionTest(settings, newKey.takeIf { it.isNotBlank() }, enabled = !saving)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(enabled = !saving, onClick = { saveKey(newKey.takeIf { it.isNotBlank() }) }) { Text(context.getString(R.string.save)) }
                         if (hasKey) TextButton(enabled = !saving, onClick = { saveKey("") }) { Text(context.getString(R.string.clear_key)) }
@@ -134,7 +139,6 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
                     avatarMessage?.let { Text(it, Modifier.testTag("avatar-status"), style = MaterialTheme.typography.bodySmall) }
                 }
                 SettingsSection(context.getString(R.string.about)) {
-                    Text(context.getString(R.string.language_auto), style = MaterialTheme.typography.bodyMedium)
                     Text(context.getString(R.string.art_credit), style = MaterialTheme.typography.bodySmall)
                     Text("Noto Sans SC · SIL Open Font License 1.1", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { showLicense = true }) { Text(context.getString(R.string.font_license)) }
@@ -159,5 +163,66 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
             Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             content()
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DisplaySettings() {
+    val context = LocalContext.current
+    val prefs = context.app.prefs
+    val display by prefs.display.collectAsStateWithLifecycle()
+    SettingsSection(context.getString(R.string.display_settings)) {
+        Text(context.getString(R.string.language), style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UiLanguage.entries.forEach { language ->
+                FilterChip(
+                    selected = display.language == language,
+                    onClick = { prefs.setLanguage(language) },
+                    label = { Text(when (language) {
+                        UiLanguage.SYSTEM -> context.getString(R.string.follow_system)
+                        UiLanguage.ZH -> "中文"
+                        UiLanguage.EN -> "English"
+                    }) },
+                    modifier = Modifier.testTag("language-${language.name}"),
+                )
+            }
+        }
+        Text(context.getString(R.string.appearance), style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeMode.entries.forEach { theme ->
+                FilterChip(
+                    selected = display.theme == theme,
+                    onClick = { prefs.setTheme(theme) },
+                    label = { Text(context.getString(when (theme) {
+                        ThemeMode.SYSTEM -> R.string.follow_system
+                        ThemeMode.LIGHT -> R.string.light_mode
+                        ThemeMode.DARK -> R.string.dark_mode
+                    })) },
+                    leadingIcon = if (theme == ThemeMode.SYSTEM) null else { {
+                        Icon(androidx.compose.ui.res.painterResource(if (theme == ThemeMode.LIGHT) R.drawable.ic_sun else R.drawable.ic_moon), null, Modifier.size(18.dp))
+                    } },
+                    modifier = Modifier.testTag("theme-${theme.name}"),
+                )
+            }
+        }
+        Text(context.getString(R.string.text_size), style = MaterialTheme.typography.titleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextSize.entries.forEach { size ->
+                FilterChip(
+                    selected = display.textSize == size,
+                    onClick = { prefs.setTextSize(size) },
+                    label = { Text(context.getString(when (size) {
+                        TextSize.STANDARD -> R.string.size_standard
+                        TextSize.LARGE -> R.string.size_large
+                        TextSize.EXTRA_LARGE -> R.string.size_extra_large
+                        TextSize.LARGEST -> R.string.size_largest
+                    })) },
+                    modifier = Modifier.testTag("text-size-${size.name}"),
+                )
+            }
+        }
+        Text(context.getString(R.string.text_size_hint), style = MaterialTheme.typography.bodySmall)
+        Text(context.getString(R.string.reading_preview), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("reading-preview"))
     }
 }

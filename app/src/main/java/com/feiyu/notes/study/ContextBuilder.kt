@@ -23,6 +23,7 @@ object ContextBuilder {
         referenceNote: Entry?,
         template: Template?,
         resolvePhoto: (String) -> File,
+        base: String = StudyPrompts.SYSTEM,
     ): AiInput {
         require(target.kind == EntryKind.USER && target.action != null)
         val chain = ancestors(target, lessonEntries)
@@ -51,7 +52,7 @@ object ContextBuilder {
         }
 
         val system = StudyPrompts.withTemplate(
-            StudyPrompts.withReference(StudyPrompts.SYSTEM, referenceNote?.text),
+            StudyPrompts.withReference(base, referenceNote?.text),
             template?.instruction,
         )
         return AiInput(system, history + AiMessage(AiRole.USER, text, images))

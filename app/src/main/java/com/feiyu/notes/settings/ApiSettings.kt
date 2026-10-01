@@ -5,6 +5,14 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.feiyu.notes.ai.AiConfig
 import com.feiyu.notes.ai.AiDefaults
+import com.feiyu.notes.ai.AiModel
+import com.feiyu.notes.ai.AiError
+import com.feiyu.notes.ai.DeepSeekClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
 import java.security.KeyStore
 import java.util.Base64
 import javax.crypto.Cipher
@@ -14,14 +22,31 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * API key (encrypted with an Android Keystore AES-GCM key) and model name in private prefs.
- * Only the generator calls [load]; screens use [model] and [hasKey] and never see the key.
+ * The generator and connectivity check use decrypted keys; screens never receive stored key text.
  */
 class ApiSettings(context: Context, name: String = "api_settings", private val alias: String = ALIAS) {
     private val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
 
+    private val _models = MutableStateFlow(runCatching {
+        Json.decodeFromString<List<AiModel>>(prefs.getString("models", "[]")!!)
+    }.getOrDefault(emptyList()))
+    val models = _models.asStateFlow()
+
+    suspend fun refreshModels(typedKey: String? = null): List<AiModel> {
+        val config = withContext(Dispatchers.IO) {
+            typedKey?.trim()?.takeIf { it.isNotBlank() }?.let { AiConfig(it) } ?: load() ?: throw AiError.MissingKey()
+        }
+        val result = DeepSeekClient(config).listModels()
+        prefs.edit().putString("models", Json.encodeToString(result)).apply()
+        _models.value = result
+        return result
+    }
+
+    fun effort(): String = prefs.getString("effort", null)?.takeIf { it.isNotBlank() } ?: AiDefaults.EFFORT
+
     fun load(): AiConfig? {
         val key = decrypt(prefs.getString(KEY_CIPHER, null) ?: return null) ?: return null
-        return AiConfig(apiKey = key, model = model())
+        return AiConfig(apiKey = key, model = model(), effort = effort())
     }
 
     fun model(): String = prefs.getString(KEY_MODEL, null)?.takeIf { it.isNotBlank() } ?: AiDefaults.MODEL
@@ -29,8 +54,8 @@ class ApiSettings(context: Context, name: String = "api_settings", private val a
     fun hasKey(): Boolean = load() != null
 
     /** A null [apiKey] keeps the stored key; a blank one clears it. */
-    fun save(apiKey: String?, model: String) {
-        val editor = prefs.edit().putString(KEY_MODEL, model.trim())
+    fun save(apiKey: String?, model: String, effort: String = effort()) {
+        val editor = prefs.edit().putString(KEY_MODEL, model.trim()).putString("effort", effort.trim().ifBlank { AiDefaults.EFFORT })
         when {
             apiKey == null -> Unit
             apiKey.isBlank() -> editor.remove(KEY_CIPHER)

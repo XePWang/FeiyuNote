@@ -18,6 +18,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -86,7 +97,7 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(d?.lesson?.title ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
+                title = { Text(d?.lesson?.let { lessonTitle(context, it) } ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
                 actions = {
                     TextButton(enabled = d?.lesson != null && status.running == null, onClick = { summarizing = true }) { Text(context.getString(R.string.summarize)) }
@@ -103,7 +114,11 @@ fun ChatScreen(
                     val practice = d.notebook?.kind == NotebookKind.PRACTICE
                     val notes = d.entries.filter { it.kind == EntryKind.NOTE }
                     val rows = threadRows(d.entries, archived = false)
+                    val numbers = remember(d.entries) { qaNumbers(d.entries) }
+                    // LazyColumn index of each question row: header item, then notes, then rows.
+                    val questions = rows.withIndex().filter { it.value.first.kind == EntryKind.USER }.map { it.index + notes.size + 1 to it.value.first }
                     val listState = rememberLazyListState()
+                    val scope = rememberCoroutineScope()
                     LaunchedEffect(focusEntryId, rows.size) {
                         val index = rows.indexOfFirst { it.first.id == focusEntryId }
                         // Jump to a requested source entry, otherwise follow the newest entry.
@@ -116,7 +131,9 @@ fun ChatScreen(
                         if (notes.size > seenNotes) listState.scrollToItem(0)
                         seenNotes = notes.size
                     }
-                    LazyColumn(Modifier.weight(1f).widthIn(max = 840.dp).fillMaxWidth().testTag("chat-list"), state = listState) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                    LazyColumn(Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("chat-list"), state = listState) {
                         item(key = "notes") {
                             if (rows.isEmpty() && notes.isEmpty()) WelcomeCard()
                             if (notes.isNotEmpty()) Text(context.getString(R.string.lesson_notes), Modifier.padding(16.dp, 8.dp), style = MaterialTheme.typography.titleSmall)
@@ -132,6 +149,7 @@ fun ChatScreen(
                             EntryCard(
                                 entry = entry,
                                 depth = depth,
+                                number = numbers[entry.id],
                                 all = d.entries,
                                 templates = d.templates,
                                 practice = practice,
@@ -145,8 +163,14 @@ fun ChatScreen(
                             )
                         }
                     }
+                    }
+                    if (questions.size > 1) {
+                        val current by remember(questions) { derivedStateOf { questions.indexOfLast { it.first <= listState.firstVisibleItemIndex }.coerceAtLeast(0) } }
+                        QuestionRail(questions.map { it.second }, numbers, current) { scope.launch { listState.scrollToItem(questions[it].first) } }
+                    }
+                    }
                     StatusBar(status.running?.lessonId == vm.lessonId, status.running != null, status.message, notice, vm)
-                    Composer(vm, practice, d.referenceNotes, d.templates, d.notebook?.defaultTemplateId, busy = status.running != null)
+                    Composer(vm, practice, d.referenceNotes, d.templates, d.notebook?.defaultTemplateId, numbers, busy = status.running != null)
                 }
             }
         }
@@ -178,12 +202,54 @@ fun ChatScreen(
 fun threadRows(entries: List<Entry>, archived: Boolean): List<Pair<Entry, Int>> {
     val children = entries.filter { it.kind != EntryKind.NOTE }.groupBy { it.parentEntryId }
     val out = mutableListOf<Pair<Entry, Int>>()
-    fun visit(e: Entry, depth: Int) {
+    // Explicit stack: General chat grows one long parent chain, too deep for recursion.
+    val stack = ArrayDeque(children[null].orEmpty().filter { it.isRoot && it.archived == archived }.asReversed().map { it to 0 })
+    while (stack.isNotEmpty()) {
+        val (e, depth) = stack.removeLast()
         out += e to depth
-        children[e.id].orEmpty().forEach { visit(it, depth + 1) }
+        children[e.id].orEmpty().asReversed().forEach { stack.addLast(it to depth + 1) }
     }
-    children[null].orEmpty().filter { it.isRoot && it.archived == archived }.forEach { visit(it, 0) }
     return out
+}
+
+/**
+ * Display numbers: the n-th question of the session (creation order, archived included so
+ * archiving never renumbers) is #n, and every reply or retry shares its question's number.
+ * SQLite ids stay internal.
+ */
+fun qaNumbers(entries: List<Entry>): Map<Long, Int> {
+    val numbers = entries.filter { it.kind == EntryKind.USER }.sortedBy { it.id }
+        .withIndex().associate { (i, e) -> e.id to i + 1 }
+    return numbers + entries.filter { it.kind == EntryKind.ASSISTANT }
+        .mapNotNull { a -> a.parentEntryId?.let(numbers::get)?.let { a.id to it } }
+}
+
+fun lessonTitle(context: android.content.Context, lesson: com.feiyu.notes.data.Lesson): String =
+    if (lesson.id == com.feiyu.notes.data.NotebookStore.GENERAL_ID) context.getString(R.string.general_chat) else lesson.title
+
+/** Right-hand jump nodes, one per question in reading order; tapping only scrolls the list. */
+@Composable
+private fun QuestionRail(questions: List<Entry>, numbers: Map<Long, Int>, current: Int, onJump: (Int) -> Unit) {
+    val context = LocalContext.current
+    val railState = rememberLazyListState()
+    LaunchedEffect(current) { railState.animateScrollToItem((current - 3).coerceAtLeast(0)) }
+    LazyColumn(Modifier.width(44.dp).fillMaxHeight().testTag("question-rail"), state = railState,
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        itemsIndexed(questions, key = { _, q -> q.id }) { i, q ->
+            val isCurrent = i == current
+            val n = numbers[q.id] ?: 0
+            val summary = q.text.lineSequence().firstOrNull().orEmpty().take(40)
+            Box(Modifier.size(44.dp, 48.dp).clickable { onJump(i) }
+                .semantics { contentDescription = context.getString(R.string.jump_to_question, n, summary); selected = isCurrent },
+                contentAlignment = Alignment.Center) {
+                Surface(shape = CircleShape, color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (isCurrent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) {
+                    Text("$n", Modifier.defaultMinSize(minWidth = 28.dp).padding(4.dp),
+                        style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -191,6 +257,7 @@ fun threadRows(entries: List<Entry>, archived: Boolean): List<Pair<Entry, Int>> 
 fun EntryCard(
     entry: Entry,
     depth: Int,
+    number: Int?,
     all: List<Entry>,
     templates: List<Template>,
     practice: Boolean,
@@ -216,7 +283,7 @@ fun EntryCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (!isUser) WhaleAvatar(vm.lessonId)
-                Text(label(context, entry), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                Text(label(context, entry, number ?: entry.id.toInt()), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                 if (entry.isRoot && practice && entry.mastery != null) FilterChip(
                     selected = entry.mastery == Mastery.MASTERED,
                     onClick = { if (!readOnly) vm.setMastery(entry.id, if (entry.mastery == Mastery.MASTERED) Mastery.UNMASTERED else Mastery.MASTERED) },
@@ -251,18 +318,18 @@ fun EntryCard(
     )
 }
 
-private fun label(context: android.content.Context, entry: Entry): String = when (entry.kind) {
+private fun label(context: android.content.Context, entry: Entry, number: Int): String = when (entry.kind) {
     EntryKind.USER -> when (entry.action) {
-        EntryAction.EXPAND -> context.getString(R.string.expand_number, entry.id)
-        EntryAction.MISTAKE -> context.getString(R.string.solution_number, entry.id)
-        else -> if (entry.isRoot) context.getString(R.string.question_number, entry.id) else context.getString(R.string.follow_number, entry.id)
+        EntryAction.EXPAND -> context.getString(R.string.expand_number, number)
+        EntryAction.MISTAKE -> context.getString(R.string.solution_number, number)
+        else -> if (entry.isRoot) context.getString(R.string.question_number, number) else context.getString(R.string.follow_number, number)
     }
     EntryKind.ASSISTANT -> when (entry.state) {
         EntryState.PENDING -> context.getString(R.string.reply_pending)
         EntryState.FAILED -> context.getString(R.string.reply_failed)
         EntryState.CANCELLED -> context.getString(R.string.reply_cancelled)
         EntryState.INTERRUPTED -> context.getString(R.string.reply_interrupted)
-        else -> context.getString(R.string.reply_number, entry.id)
+        else -> context.getString(R.string.reply_number, number)
     }
     EntryKind.NOTE -> context.getString(R.string.note_number, entry.id)
 }
@@ -323,6 +390,7 @@ private fun Composer(
     referenceNotes: List<Entry>,
     templates: List<Template>,
     defaultTemplateId: Long?,
+    numbers: Map<Long, Int>,
     busy: Boolean,
 ) {
     val context = LocalContext.current
@@ -353,7 +421,7 @@ private fun Composer(
                 EntryAction.ASK -> context.getString(R.string.follow_up)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(context.getString(R.string.reply_target, mode, parentId), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                Text(context.getString(R.string.reply_target, mode, numbers[parentId] ?: parentId), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                 TextButton(onClick = { vm.setTarget(null) }) { Text(context.getString(R.string.cancel_reply)) }
             }
             val chain = vm.chainPhotos()
@@ -366,7 +434,7 @@ private fun Composer(
                         FilterChip(
                             selected = e.id in attached,
                             onClick = { vm.toggleAttached(e.id) },
-                            label = { Text("#${e.id} · ${context.getString(R.string.photo_count, e.imagePaths.size)} ${e.text.take(8)}") },
+                            label = { Text("#${numbers[e.id] ?: e.id} · ${context.getString(R.string.photo_count, e.imagePaths.size)} ${e.text.take(8)}") },
                         )
                     }
                 }
@@ -378,6 +446,7 @@ private fun Composer(
             val effective = if (templateOverride) templateChoice.takeIf { it > 0 } else defaultTemplateId
             val tName = effective?.let { id -> templates.firstOrNull { it.id == id }?.name } ?: context.getString(R.string.none)
             TextButton(onClick = { pickTemplate = true }) { Text(context.getString(if (!templateOverride && effective != null) R.string.template_default_name else R.string.template_name, tName)) }
+            SessionModel(vm.lessonId, busy)
         }
         if (photoNames.isNotEmpty()) {
             Text(context.getString(R.string.photo_count, photoNames.size), style = MaterialTheme.typography.labelLarge)

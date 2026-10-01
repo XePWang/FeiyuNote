@@ -19,6 +19,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlinx.coroutines.withTimeout
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -57,9 +59,31 @@ class DeepSeekClient(
         return parse(code, text)
     }
 
+    /** Authenticated, non-generating connectivity check; unknown metadata is ignored. */
+    suspend fun listModels(): List<AiModel> = withTimeout(30_000) {
+        if (config.apiKey.isBlank()) throw AiError.MissingKey()
+        val url = config.endpoint.toHttpUrl().newBuilder().encodedPath("/models").build()
+        val request = Request.Builder().url(url).header("Authorization", "Bearer ${config.apiKey}").get().build()
+        val (code, text) = http.newCall(request).await()
+        checkStatus(code, text)
+        runCatching {
+            Json.parseToJsonElement(text).jsonObject["data"]!!.jsonArray.map { item ->
+                val model = item.jsonObject
+                val id = model["id"]!!.jsonPrimitive.content
+                require(id.isNotBlank())
+                val effort = model["effort"]?.jsonObject
+                AiModel(id, model["name"]?.jsonPrimitive?.contentOrNull ?: id,
+                    effort?.get("supported_levels")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    effort?.get("default_level")?.jsonPrimitive?.contentOrNull,
+                    model["input_modalities"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty())
+            }.distinctBy { it.id }.also { require(it.isNotEmpty()) }
+        }.getOrElse { throw AiError.BadResponse("Invalid model list") }
+    }
+
     internal fun requestJson(input: AiInput): JsonObject = buildJsonObject {
         put("model", config.model)
         put("stream", false)
+        put("reasoning_effort", config.effort)
         putJsonArray("messages") {
             addJsonObject {
                 put("role", "system")
@@ -90,7 +114,7 @@ class DeepSeekClient(
     private fun readImage(file: File): ByteArray =
         runCatching { encodeImage(file) }.getOrElse { throw AiError.ImageUnreadable(file.name) }
 
-    private fun parse(code: Int, text: String): AiReply {
+    private fun checkStatus(code: Int, text: String) {
         val detail = errorMessage(text)
         when {
             code == 401 || code == 403 -> throw AiError.Auth(code)
@@ -99,6 +123,10 @@ class DeepSeekClient(
             code == 400 && detail.contains("length", ignoreCase = true) -> throw AiError.TooLarge(code, detail)
             code !in 200..299 -> throw AiError.Server(code, detail)
         }
+    }
+
+    private fun parse(code: Int, text: String): AiReply {
+        checkStatus(code, text)
         val content = runCatching {
             val choice = Json.parseToJsonElement(text).jsonObject["choices"]!!.jsonArray.first().jsonObject
             choice["message"]!!.jsonObject["content"]?.jsonPrimitive?.contentOrNull

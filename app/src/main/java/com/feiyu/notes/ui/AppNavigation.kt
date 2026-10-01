@@ -66,6 +66,7 @@ fun AppNavigation(initial: List<NavKey>) {
                     generator = app.generator,
                     onOpen = { backStack.openList(LessonListKey(it.id)) },
                     onSettings = { backStack.add(SettingsKey) },
+                    onGeneralChat = { backStack.openDetail(LessonKey(it.notebookId, it.id)) },
                 )
             }
             entry<LessonListKey>(

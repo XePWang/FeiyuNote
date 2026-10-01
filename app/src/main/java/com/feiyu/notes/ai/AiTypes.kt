@@ -1,6 +1,7 @@
 package com.feiyu.notes.ai
 
 import java.io.File
+import kotlinx.serialization.Serializable
 
 /** Provider-neutral request types; business code never sees DeepSeek DTOs. */
 data class AiInput(val systemText: String, val messages: List<AiMessage>)
@@ -20,14 +21,18 @@ data class AiConfig(
     val apiKey: String,
     val model: String = AiDefaults.MODEL,
     val endpoint: String = AiDefaults.ENDPOINT,
+    val effort: String = AiDefaults.EFFORT,
 ) {
-    override fun toString(): String = "AiConfig(apiKey=<redacted>, model=$model, endpoint=$endpoint)"
+    override fun toString(): String = "AiConfig(apiKey=<redacted>, model=$model, endpoint=$endpoint, effort=$effort)"
 }
 
 /** Central defaults (spec §6). Endpoint is fixed; the model is user-editable. */
 object AiDefaults {
     const val ENDPOINT = "https://api.deepseek.com/chat/completions"
     const val MODEL = "deepseek-flash"
+    /** DeepSeek's three official effort tiers; the lowest is the default. */
+    val EFFORTS = listOf("low", "high", "max")
+    const val EFFORT = "low"
     /** Longest image edge sent to the model; originals stay on disk untouched. */
     const val IMAGE_MAX_EDGE = 1600
     const val JPEG_QUALITY = 85
@@ -45,3 +50,15 @@ sealed class AiError(message: String, cause: Throwable? = null) : Exception(mess
     class BadResponse(detail: String) : AiError("无法解析服务响应：$detail")
     class ImageUnreadable(name: String) : AiError("照片无法读取：$name")
 }
+
+@Serializable
+data class AiModel(
+    val id: String,
+    val name: String = id,
+    val efforts: List<String> = emptyList(),
+    val defaultEffort: String? = null,
+    val inputModalities: List<String> = emptyList(),
+)
+
+data class ModelChoice(val model: String = AiDefaults.MODEL, val effort: String = AiDefaults.EFFORT)
+

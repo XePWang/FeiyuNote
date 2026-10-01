@@ -13,10 +13,6 @@ import com.feiyu.notes.ui.theme.FeiyuTheme
 import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
-    override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.feiyu.notes.settings.AppLanguage.context(newBase))
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -38,6 +34,7 @@ class MainActivity : ComponentActivity() {
             app.prefs.clearLastLesson()
             return listOf(NotebookListKey)
         }
-        return listOf(NotebookListKey, LessonListKey(notebookId), LessonKey(notebookId, lessonId))
+        return if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) listOf(NotebookListKey, LessonKey(notebookId, lessonId))
+        else listOf(NotebookListKey, LessonListKey(notebookId), LessonKey(notebookId, lessonId))
     }
 }

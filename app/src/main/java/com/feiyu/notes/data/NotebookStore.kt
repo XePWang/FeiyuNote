@@ -28,10 +28,19 @@ class NotebookStore(
 
     private val db: SQLiteDatabase get() = database.writableDatabase
 
+    companion object { const val GENERAL_ID = -2L }
+
+    /** Fixed local chat; negative IDs cannot collide with SQLite auto-generated IDs. */
+    suspend fun generalChat(): Lesson = write {
+        db.execSQL("INSERT OR IGNORE INTO notebooks(id, kind, name, created_at) VALUES (?, 'course', 'General chat', ?)", arrayOf(GENERAL_ID, clock()))
+        db.execSQL("INSERT OR IGNORE INTO lessons(id, notebook_id, title, created_at) VALUES (?, ?, 'General chat', ?)", arrayOf(GENERAL_ID, GENERAL_ID, clock()))
+        query("SELECT * FROM lessons WHERE id = ?", GENERAL_ID) { it.toLesson() }.single()
+    }
+
     // ---- notebooks ----
 
     suspend fun listNotebooks(): List<Notebook> = read {
-        query("SELECT * FROM notebooks ORDER BY created_at, id") { it.toNotebook() }
+        query("SELECT * FROM notebooks WHERE id != -2 ORDER BY created_at, id") { it.toNotebook() }
     }
 
     suspend fun getNotebook(id: Long): Notebook? = read {
@@ -67,6 +76,7 @@ class NotebookStore(
 
     /** Deletes the notebook with its lessons, entries, notes and image directory; unlinks practice books. */
     suspend fun deleteNotebook(id: Long): Boolean {
+        if (id == GENERAL_ID) return false
         val deleted = write { db.delete("notebooks", "id = ?", args(id)) == 1 }
         if (deleted) withContext(io) { photos.deleteNotebookDir(id) }
         return deleted
@@ -98,6 +108,7 @@ class NotebookStore(
     }
 
     suspend fun deleteLesson(id: Long): Boolean {
+        if (id == GENERAL_ID) return false
         val notebookId = getLesson(id)?.notebookId ?: return false
         var images = emptyList<String>()
         val deleted = write {

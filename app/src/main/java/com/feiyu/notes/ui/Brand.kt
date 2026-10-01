@@ -84,3 +84,15 @@ fun WelcomeCard(compact: Boolean = false) {
         }
     }
 }
+
+/** The icon names the action: moon switches to dark, sun switches to light. */
+@Composable
+fun ThemeToggle() {
+    val context = LocalContext.current
+    val dark = com.feiyu.notes.ui.theme.LocalDarkTheme.current
+    ActionIcon(
+        if (dark) R.drawable.ic_sun else R.drawable.ic_moon,
+        context.getString(if (dark) R.string.switch_light else R.string.switch_dark),
+        { context.app.prefs.setTheme(if (dark) com.feiyu.notes.settings.ThemeMode.LIGHT else com.feiyu.notes.settings.ThemeMode.DARK) },
+    )
+}

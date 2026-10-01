@@ -16,9 +16,9 @@ Character design: **上善无形** and **ZipZipPipe**. The 21 stickers, includin
 
 Copyright 2014–2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
 
-字体使用 **SIL Open Font License 1.1**。原文随应用分发于 [NotoSansSC-OFL.txt](app/src/main/assets/licenses/NotoSansSC-OFL.txt)。
+应用内置的 Regular（400）与 Medium（500）静态字重由上游可变字体实例化生成，未修改字形。字体使用 **SIL Open Font License 1.1**。原文随应用分发于 [NotoSansSC-OFL.txt](app/src/main/assets/licenses/NotoSansSC-OFL.txt)。
 
-The font is distributed under **SIL Open Font License 1.1**. [Source](https://github.com/google/fonts/tree/main/ofl/notosanssc).
+The bundled Regular (400) and Medium (500) files are static instances of the upstream variable font, with glyphs unchanged. The font is distributed under **SIL Open Font License 1.1**. [Source](https://github.com/google/fonts/tree/main/ofl/notosanssc).
 
 ## JLaTeXMath Android
 

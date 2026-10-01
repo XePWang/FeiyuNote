@@ -48,6 +48,7 @@ fun NotebookListScreen(
     generator: Generator,
     onOpen: (Notebook) -> Unit,
     onSettings: () -> Unit,
+    onGeneralChat: (com.feiyu.notes.data.Lesson) -> Unit,
 ) {
     val context = LocalContext.current
     val notebooks by rememberStoreValue(store) { listNotebooks() }
@@ -63,11 +64,16 @@ fun NotebookListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(context.getString(R.string.app_name)) },
-                actions = { ActionIcon(R.drawable.ic_settings, context.getString(R.string.settings), onSettings) },
+                actions = { ThemeToggle(); ActionIcon(R.drawable.ic_settings, context.getString(R.string.settings), onSettings) },
             )
         },
     ) { padding ->
         LazyColumn(Modifier.padding(padding)) {
+            item(key = "general-chat") {
+                ListItem(headlineContent = { Text(context.getString(R.string.general_chat), style = MaterialTheme.typography.titleMedium) },
+                    supportingContent = { Text(context.getString(R.string.general_chat_hint)) },
+                    modifier = Modifier.testTag("general-chat").clickable { scope.launch { onGeneralChat(store.generalChat()) } })
+            }
             item(key = "welcome") { WelcomeCard(compact = true) }
             for (kind in NotebookKind.entries) {
                 val label = if (kind == NotebookKind.COURSE) context.getString(R.string.courses) else context.getString(R.string.practice_books)

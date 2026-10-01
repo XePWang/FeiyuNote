@@ -30,12 +30,13 @@ fun ArchivedScreen(vm: StudyViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(context.getString(R.string.archive_title, d?.lesson?.title.orEmpty())) },
+                title = { Text(context.getString(R.string.archive_title, d?.lesson?.let { lessonTitle(context, it) }.orEmpty())) },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
             )
         },
     ) { padding ->
         val rows = d?.let { threadRows(it.entries, archived = true) }.orEmpty()
+        val numbers = d?.let { qaNumbers(it.entries) }.orEmpty()
         LazyColumn(Modifier.padding(padding).fillMaxSize()) {
             if (d != null && rows.isEmpty()) item {
                 Text(context.getString(R.string.archive_empty), Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
@@ -44,6 +45,7 @@ fun ArchivedScreen(vm: StudyViewModel, onBack: () -> Unit) {
                 EntryCard(
                     entry = entry,
                     depth = depth,
+                    number = numbers[entry.id],
                     all = d!!.entries,
                     templates = d.templates,
                     practice = d.notebook?.kind == NotebookKind.PRACTICE,

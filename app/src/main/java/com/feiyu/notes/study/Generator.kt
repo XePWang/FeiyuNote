@@ -47,7 +47,7 @@ class Generator(
     private val appContext: Context,
     private val store: NotebookStore,
     private val photos: PhotoFiles,
-    private val loadConfig: suspend () -> AiConfig?,
+    private val loadConfig: suspend (Long) -> AiConfig?,
     private val scope: CoroutineScope,
     /** Completes once leftover pending replies have been marked interrupted. */
     private val ready: Job,
@@ -89,7 +89,7 @@ class Generator(
         job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var message = CANCELLED
             try {
-                val reply = generate(requireConfig(), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
+                val reply = generate(requireConfig(lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
                 message = if (store.commitSummary(lessonId, reply.text, sources, templateId) != null) context.getString(R.string.summary_created) else DISCARDED
             } catch (e: CancellationException) {
                 throw e
@@ -122,8 +122,9 @@ class Generator(
                 val entries = store.readEntries(user.lessonId, includeArchived = true)
                 val reference = user.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
                 val template = user.templateId?.let { store.getTemplate(it) }
-                val input = ContextBuilder.buildTurn(user, entries, reference, template) { photos.resolvePhoto(notebookId, it) }
-                val answer = generate(requireConfig(), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
+                val base = if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) StudyPrompts.GENERAL_SYSTEM else StudyPrompts.SYSTEM
+                val input = ContextBuilder.buildTurn(user, entries, reference, template, resolvePhoto = { photos.resolvePhoto(notebookId, it) }, base = base)
+                val answer = generate(requireConfig(user.lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
                 message = if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) null else DISCARDED
             } catch (e: CancellationException) {
                 withContext(NonCancellable) { store.commitReply(reply.id, context.getString(R.string.cancelled), EntryState.CANCELLED) }
@@ -160,7 +161,7 @@ class Generator(
         return null
     }
 
-    private suspend fun requireConfig(): AiConfig = loadConfig() ?: throw AiError.MissingKey()
+    private suspend fun requireConfig(lessonId: Long): AiConfig = loadConfig(lessonId) ?: throw AiError.MissingKey()
 
     private inline fun exclusive(block: () -> StartResult): StartResult {
         if (!busy.compareAndSet(false, true)) return StartResult.Busy

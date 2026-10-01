@@ -1,16 +1,61 @@
 package com.feiyu.notes.settings
 
 import android.content.Context
+import com.feiyu.notes.ai.ModelChoice
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+enum class UiLanguage { SYSTEM, ZH, EN }
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class TextSize(val scale: Float) { STANDARD(1f), LARGE(1.15f), EXTRA_LARGE(1.3f), LARGEST(1.5f) }
+data class DisplayPreferences(
+    val language: UiLanguage = UiLanguage.SYSTEM,
+    val theme: ThemeMode = ThemeMode.SYSTEM,
+    val textSize: TextSize = TextSize.STANDARD,
+)
 
 /** Plain UI preferences; not part of the notebook database. */
 class AppPrefs(context: Context, name: String = NAME) {
     private val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
 
+    private val _display = MutableStateFlow(DisplayPreferences(
+        language = UiLanguage.entries.firstOrNull { it.name == prefs.getString("language", null) } ?: UiLanguage.SYSTEM,
+        theme = ThemeMode.entries.firstOrNull { it.name == prefs.getString("theme", null) } ?: ThemeMode.SYSTEM,
+        textSize = TextSize.entries.firstOrNull { it.name == prefs.getString("text_size", null) } ?: TextSize.STANDARD,
+    ))
+    val display = _display.asStateFlow()
+
+    fun setLanguage(value: UiLanguage) = updateDisplay(display.value.copy(language = value))
+    fun setTheme(value: ThemeMode) = updateDisplay(display.value.copy(theme = value))
+    fun setTextSize(value: TextSize) = updateDisplay(display.value.copy(textSize = value))
+
+    private fun updateDisplay(value: DisplayPreferences) {
+        prefs.edit().putString("language", value.language.name).putString("theme", value.theme.name)
+            .putString("text_size", value.textSize.name).apply()
+        _display.value = value
+    }
+
+    private val _modelRevision = MutableStateFlow(0L)
+    val modelRevision = _modelRevision.asStateFlow()
+
+    fun sessionModel(lessonId: Long, default: ModelChoice): ModelChoice =
+        prefs.getString("model_$lessonId", null)?.let { model ->
+            ModelChoice(model, prefs.getString("effort_$lessonId", null) ?: default.effort)
+        } ?: default
+
+    fun setSessionModel(lessonId: Long, choice: ModelChoice?) {
+        val edit = prefs.edit()
+        if (choice == null) edit.remove("model_$lessonId").remove("effort_$lessonId")
+        else edit.putString("model_$lessonId", choice.model.trim()).putString("effort_$lessonId", choice.effort.trim())
+        edit.apply()
+        _modelRevision.value++
+    }
+
     val lastLesson: Pair<Long, Long>?
         get() {
             val notebook = prefs.getLong(NOTEBOOK, -1)
             val lesson = prefs.getLong(LESSON, -1)
-            return if (notebook > 0 && lesson > 0) notebook to lesson else null
+            return if ((notebook > 0 && lesson > 0) || (notebook == -2L && lesson == -2L)) notebook to lesson else null
         }
 
     fun setLastLesson(notebookId: Long, lessonId: Long) {

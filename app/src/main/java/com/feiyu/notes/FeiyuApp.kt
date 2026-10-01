@@ -50,7 +50,7 @@ class FeiyuApp : Application() {
             filesRoot = filesDir,
             databaseName = NotebookDatabase.NAME,
             prefsName = AppPrefs.NAME,
-            loadConfig = { withContext(Dispatchers.IO) { apiSettings.load() } },
+            loadConfig = { lessonId -> withContext(Dispatchers.IO) { apiSettings.load()?.let { forSession(lessonId, it) } } },
             generate = { config, input -> DeepSeekClient(config).generate(input) },
         )
     }
@@ -62,7 +62,13 @@ class FeiyuApp : Application() {
     @VisibleForTesting
     fun installTestEnvironment(root: File, generate: suspend (AiConfig, AiInput) -> AiReply) {
         apiSettings = ApiSettings(this, TEST_API_PREFS, TEST_API_ALIAS)
-        install(root, TEST_DATABASE, TEST_PREFS, loadConfig = { AiConfig(apiKey = "test") }, generate = generate)
+        install(root, TEST_DATABASE, TEST_PREFS, loadConfig = { forSession(it, AiConfig(apiKey = "test", model = apiSettings.model(), effort = apiSettings.effort())) }, generate = generate)
+    }
+
+    /** Settings hold the default model/effort; a session's own choice overrides both. */
+    private fun forSession(lessonId: Long, config: AiConfig): AiConfig {
+        val choice = prefs.sessionModel(lessonId, com.feiyu.notes.ai.ModelChoice(config.model, config.effort))
+        return config.copy(model = choice.model, effort = choice.effort)
     }
 
     @VisibleForTesting
@@ -72,7 +78,7 @@ class FeiyuApp : Application() {
         filesRoot: File,
         databaseName: String,
         prefsName: String,
-        loadConfig: suspend () -> AiConfig?,
+        loadConfig: suspend (Long) -> AiConfig?,
         generate: suspend (AiConfig, AiInput) -> AiReply,
     ) {
         avatars = com.feiyu.notes.settings.AvatarFiles(filesRoot)

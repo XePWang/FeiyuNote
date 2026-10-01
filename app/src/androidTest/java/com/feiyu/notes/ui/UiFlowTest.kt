@@ -11,7 +11,8 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -64,10 +65,12 @@ class UiFlowTest {
     private lateinit var originalLocales: android.os.LocaleList
     private val root = File(app.filesDir, "ui-test")
     private val inputs: MutableList<AiInput> = Collections.synchronizedList(mutableListOf())
+    private val configs: MutableList<AiConfig> = Collections.synchronizedList(mutableListOf())
     private var scenario: ActivityScenario<MainActivity>? = null
     private var mathReply: String? = null
 
-    private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { _, input ->
+    private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { config, input ->
+        configs += config
         inputs += input
         mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
     }
@@ -184,7 +187,8 @@ class UiFlowTest {
         // Cold start returns to the last lesson.
         scenario?.close()
         launch()
-        awaitAnswer("答案1")
+        // Reopens the last lesson scrolled to its newest reply.
+        awaitAnswer("答案3")
         compose.onNodeWithTag("composer-input").assertExists()
     }
 
@@ -316,7 +320,7 @@ class UiFlowTest {
         ask("第二问")
         awaitAnswer("答案2")
 
-        compose.onNodeWithTag("chat-list").performScrollToNode(hasText("第一问"))
+        compose.onNodeWithTag("chat-list").performScrollToIndex(1)
         compose.onAllNodesWithTag("thread-menu")[0].performClick()
         click("归档")
         compose.waitUntil(5_000) { compose.onAllNodesWithText("第一问").fetchSemanticsNodes().isEmpty() }
@@ -327,7 +331,7 @@ class UiFlowTest {
         systemBack()
         waitText("第一问")
 
-        compose.onNodeWithTag("chat-list").performScrollToNode(hasText("第一问"))
+        compose.onNodeWithTag("chat-list").performScrollToIndex(1)
         compose.onAllNodesWithTag("thread-menu")[0].performClick()
         click("删除整条问答")
         click("删除")
@@ -403,6 +407,36 @@ class UiFlowTest {
         waitText("发送")
         waitDescription("DeepSeek 头像")
         screenshot("chat-zh-phone")
+    }
+
+    @Test fun generalChatPairsNumbersJumpsWithoutRequestsAndUsesSessionEffort() {
+        click("公共聊天")
+        waitText("deepseek-flash · Low")
+        ask("第一问")
+        awaitAnswer("答案1")
+        ask("第二问")
+        awaitAnswer("答案2")
+        // The second message continues the first answer, with the general prompt and full history.
+        val entries = runBlocking { app.store.readEntries(com.feiyu.notes.data.NotebookStore.GENERAL_ID) }
+        assertEquals(entries.first { it.kind == EntryKind.ASSISTANT }.id, entries.last { it.kind == EntryKind.USER }.parentEntryId)
+        assertEquals(3, inputs.last().messages.size)
+        assertTrue(inputs.last().systemText.contains("通用助手"))
+        assertEquals(listOf("deepseek-flash" to "low", "deepseek-flash" to "low"), configs.map { it.model to it.effort })
+        listOf("提问 #1", "DeepSeek · 回答 #1", "追问 #2", "DeepSeek · 回答 #2").forEach(::waitText)
+
+        compose.onNodeWithTag("composer-input").performTextInput("草稿")
+        compose.onNodeWithContentDescription("跳到提问 #1：第一问").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("composer-input").assert(hasText("草稿"))
+        assertEquals(2, inputs.size)
+
+        app.prefs.setSessionModel(com.feiyu.notes.data.NotebookStore.GENERAL_ID, com.feiyu.notes.ai.ModelChoice("deepseek-flash", "high"))
+        waitText("deepseek-flash · High")
+        compose.onNodeWithTag("send").performClick()
+        hideKeyboard()
+        awaitAnswer("答案3")
+        assertEquals("high", configs.last().effort)
+        screenshot("general-chat-phone")
     }
 
     private fun screenshot(name: String) {

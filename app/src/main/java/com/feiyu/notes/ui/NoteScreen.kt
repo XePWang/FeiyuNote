@@ -69,11 +69,13 @@ fun NoteScreen(
     var editing by rememberSaveable(noteId) { mutableStateOf(false) }
     LaunchedEffect(note?.id) { if (text == null) note?.let { text = it.text } }
 
+    val notebookName = if (notebook?.id == com.feiyu.notes.data.NotebookStore.GENERAL_ID) context.getString(R.string.general_chat) else notebook?.name.orEmpty()
+    val lessonName = lesson?.let { lessonTitle(context, it) }.orEmpty()
     fun html(): String = NoteExporter.renderNote(
-        notebook?.name.orEmpty(), lesson?.title.orEmpty(), note?.text.orEmpty(), LocalDate.now().toString(), context.resources.configuration.locales[0].language,
+        notebookName, lessonName, note?.text.orEmpty(), LocalDate.now().toString(), context.resources.configuration.locales[0].language,
         formulaImage = com.feiyu.notes.math.MathRenderer::dataUri,
     )
-    val fileName = NoteExporter.fileName(notebook?.name.orEmpty(), lesson?.title.orEmpty())
+    val fileName = NoteExporter.fileName(notebookName, lessonName)
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
         if (uri != null) scope.launch {
             message = runCatching {

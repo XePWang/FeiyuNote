@@ -22,7 +22,7 @@ API keys use AES-256-GCM encryption in private storage, with non-exportable encr
 
 ## Interface and features
 
-- Follows the primary system language: Chinese when it is Chinese, English otherwise.
+- Choose Chinese, English, or follow the system (Chinese systems show Chinese, others English) in Settings; text size is adjustable.
 - Single-pane layout on phones, two-pane layout on large screens; light and dark themes.
 - Each session keeps a randomly selected whale-girl portrait; custom avatars are available in Settings.
 - Notes support offline reading, edit/preview modes, HTML export, and system sharing.
@@ -30,6 +30,7 @@ API keys use AES-256-GCM encryption in private storage, with non-exportable encr
 
 ## Version history
 
+- **[0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1)**: A pinned General chat on the home screen for quick questions without creating a course. The default model is DeepSeek V4.1 Flash with the official low/high/max reasoning tiers (default low); set the default in Settings or override it per session. Settings can test the API connection. Questions and answers are numbered in session order, so question N pairs with answer N, and long sessions get a jump rail on the right. Adds language, light/dark, and text-size settings, and fixes overly thin text.
 - **[0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0)**: Attach multiple images to one question. Select several photos, append camera captures, preview and remove individual attachments. Failed imports keep the other images. Existing single-image notes migrate automatically; retry and deletion handle all attachments. Uses the system photo picker without full-library permission.
 - **[0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)**: Offline LaTeX in conversations, notes, and exports; edit/preview modes and source copying; improved API-key encryption and credential protection.
 - **[0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)**: Course/session conversations, practice notebooks, note summaries and exports; Chinese/English UI, whale avatars, and adaptive layouts.

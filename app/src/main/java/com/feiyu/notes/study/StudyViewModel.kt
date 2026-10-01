@@ -188,7 +188,8 @@ class StudyViewModel(
                 kind = EntryKind.USER,
                 action = act,
                 text = draft.value.trim(),
-                parentEntryId = parentId.value.orNull(),
+                parentEntryId = parentId.value.orNull() ?: if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID)
+                    store.readEntries(lessonId).lastOrNull { it.kind == EntryKind.ASSISTANT && it.state == EntryState.COMPLETE }?.id else null,
                 sourceEntryIds = listOfNotNull(referenceId.value.orNull()),
                 imagePaths = photoNames.value.toList(),
                 attachedImageEntryIds = attached.value.toList(),
