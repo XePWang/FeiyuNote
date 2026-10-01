@@ -258,4 +258,5 @@
     <string name="skill_too_large">The file is larger than 64 KB; not installed</string>
     <string name="skill_empty">The file has no instruction text</string>
     <string name="skill_failed">Couldn\'t fetch it; check the network and try again</string>
+    <string name="general_chat_welcome">Ask about anything: type below, or take a photo or pick one from your gallery.</string>
 </resources>

@@ -72,15 +72,21 @@ fun ActionIcon(@DrawableRes icon: Int, description: String, onClick: () -> Unit,
 }
 
 @Composable
-fun WelcomeCard(compact: Boolean = false) {
+fun WelcomeCard(compact: Boolean = false, general: Boolean = false) {
     val context = LocalContext.current
     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.large,
         modifier = Modifier.padding(16.dp).fillMaxWidth()) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            CustomImage(context.app.welcomeImage, R.drawable.whale_02_01, Modifier.size(if (compact) 64.dp else 88.dp))
+            // General chat gets its own banner and illustration, matching its home card.
+            if (general) CustomImage(context.app.chatImage, R.drawable.whale_01_07, Modifier.size(88.dp))
+            else CustomImage(context.app.welcomeImage, R.drawable.whale_02_01, Modifier.size(if (compact) 64.dp else 88.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(context.getString(R.string.welcome_title), style = MaterialTheme.typography.titleMedium)
-                Text(context.getString(if (compact) R.string.welcome_short else R.string.welcome_body), style = MaterialTheme.typography.bodyMedium)
+                Text(context.getString(if (general) R.string.general_chat_tag else R.string.welcome_title), style = MaterialTheme.typography.titleMedium)
+                Text(context.getString(when {
+                    general -> R.string.general_chat_welcome
+                    compact -> R.string.welcome_short
+                    else -> R.string.welcome_body
+                }), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

@@ -135,7 +135,7 @@ fun ChatScreen(
                     Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
                     LazyColumn(Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("chat-list"), state = listState) {
                         item(key = "notes") {
-                            if (rows.isEmpty() && notes.isEmpty()) WelcomeCard()
+                            if (rows.isEmpty() && notes.isEmpty()) WelcomeCard(general = vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID)
                             if (notes.isNotEmpty()) Text(context.getString(R.string.lesson_notes), Modifier.padding(16.dp, 8.dp), style = MaterialTheme.typography.titleSmall)
                         }
                         items(notes, key = { "note-${it.id}" }) { note ->

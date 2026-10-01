@@ -414,7 +414,8 @@ class UiFlowTest {
     @Test fun generalChatPairsNumbersJumpsWithoutRequestsAndUsesSessionEffort() {
         waitText("一起来聊天吧")
         screenshot("home-general-chat")
-        click("公共聊天")
+        compose.onNodeWithTag("general-chat").performClick()
+        waitText("想聊什么都可以，直接在下方输入；也可以拍照或从相册选图来问。") // chat banner, not the study one
         waitText("deepseek-flash · Low")
         ask("第一问")
         awaitAnswer("答案1")
@@ -455,7 +456,10 @@ class UiFlowTest {
         waitText("已修改")
         systemBack()
 
-        click("公共聊天")
+        // "公共聊天" is also a prompt row in Settings; open the home card by tag once home is back.
+        waitText("一起来聊天吧")
+        compose.onNodeWithTag("general-chat").performClick()
+        waitText("想聊什么都可以，直接在下方输入；也可以拍照或从相册选图来问。")
         ask("你好")
         awaitAnswer("答案1")
         assertTrue(inputs.last().systemText.startsWith("自定义公共提示"))
