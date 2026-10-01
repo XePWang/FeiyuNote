@@ -6,7 +6,7 @@
 
 Photograph a whiteboard or slide, ask DeepSeek about it, and turn the explanation into local study notes. Organize conversations by course and session, or use practice notebooks to track mistakes and mastery.
 
-This project is at an early stage. We aim to keep it small and focused. [Issues and feature suggestions](https://github.com/Yongzhaooo/FeiyuNote/issues) are welcome. **We are not accepting pull requests for now.**
+This project is at an early stage. We aim to keep it small and focused. [Bug reports](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=bug.yml) and [feature suggestions](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=feature.yml) are welcome. For code contributions, get maintainer agreement on the scope in an Issue before opening a PR. See the [contribution guide](CONTRIBUTING.md#english).
 
 ## Download and get started
 
@@ -47,7 +47,7 @@ On Windows, run `pwsh -File scripts/setup-sdk.ps1` to install or repair the SDK;
 
 Full local CI uses isolated data and fake responses, without paid API calls. Screenshots are saved to `build/ci/screenshots/`. Enable the optional Git hooks with `git config core.hooksPath .githooks`.
 
-GitHub Actions runs unit tests and produces a debug APK on pushes to main. A `v*` tag builds a release APK using signing credentials from repository Secrets and publishes a prerelease. See the [workflow](.github/workflows/android.yml). For a signed local release build, set `FEIYU_KEYSTORE` and `FEIYU_KEY_PASSWORD` with key alias `feiyu`. Never commit signing keys.
+GitHub Actions runs unit tests and builds a debug APK for PRs targeting main and pushes to main. PR checks have read-only permissions and no release credentials. After a maintainer pushes a `v*` tag and the build passes, a separate job signs and publishes the release APK using repository Secrets. Passing CI still requires a maintainer's merge decision. See the [workflow](.github/workflows/android.yml). For a signed local release build, set `FEIYU_KEYSTORE` and `FEIYU_KEY_PASSWORD` with key alias `feiyu`. Never commit signing keys.
 
 ## License and credits
 

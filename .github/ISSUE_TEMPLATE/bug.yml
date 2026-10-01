@@ -1,0 +1,32 @@
+name: 问题报告 / Bug report
+description: 报告可复现的问题 / Report a reproducible problem
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有 Issue。日志和截图不要包含 API Key、私人笔记或个人照片。 / Search existing Issues first. Remove credentials and private data from logs and screenshots.
+  - type: input
+    id: versions
+    attributes:
+      label: 应用与系统版本 / App and Android versions
+      placeholder: "肥鱼笔记 0.2.0；Android 16；手机型号 / device model"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 从哪个页面开始，做了什么操作？ / Where did you start, and what did you do?
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 预期与实际结果 / Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 补充信息 / Additional context
+      description: 可选，提供脱敏截图或错误信息。 / Optional screenshots or errors with private information removed.

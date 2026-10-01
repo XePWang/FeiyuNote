@@ -6,7 +6,7 @@
 
 拍下板书或 PPT，围绕问题与 DeepSeek 对话，再把讲解整理成本地复习笔记。支持按课程和课次管理内容，也可以用刷题本记录错题与掌握状态。
 
-项目处于早期阶段，目标是小而美。欢迎 [Issue 和功能建议](https://github.com/Yongzhaooo/FeiyuNote/issues)，**暂不接受 PR**。
+项目处于早期阶段，目标是小而美。欢迎[报告问题](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=bug.yml)和[建议功能](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=feature.yml)。希望贡献代码时，请先在 Issue 中获得维护者对范围的明确认可，再提交 PR；流程见[贡献指南](CONTRIBUTING.md)。
 
 ## 下载与使用
 
@@ -47,7 +47,7 @@ Windows 首次配置或 SDK 缺失时，运行 `pwsh -File scripts/setup-sdk.ps1
 
 本地 full CI 使用隔离的数据和模拟回答，不调用计费接口；界面截图保存在 `build/ci/screenshots/`。Git 钩子位于 `.githooks/`，可通过 `git config core.hooksPath .githooks` 启用。
 
-GitHub Actions 在推送 main 时运行单元测试并生成 debug APK；推送 `v*` 标签时使用仓库 Secrets 中的签名密钥构建 release APK，并发布到预览版 Release。详情见 [构建流程](.github/workflows/android.yml)。本地 release 构建如需签名，应设置 `FEIYU_KEYSTORE` 和 `FEIYU_KEY_PASSWORD`（密钥别名 `feiyu`）；密钥不进入仓库。
+GitHub Actions 在提交到 main 的 PR 和 main 推送时运行单元测试并生成 debug APK。PR 检查使用只读权限，不接触发布密钥；维护者推送 `v*` 标签且构建通过后，独立发布任务使用仓库 Secrets 签名 release APK 并发布预览版。CI 通过后仍由维护者决定是否合并。详情见[构建流程](.github/workflows/android.yml)。本地 release 构建如需签名，应设置 `FEIYU_KEYSTORE` 和 `FEIYU_KEY_PASSWORD`（密钥别名 `feiyu`）；密钥不进入仓库。
 
 ## 许可与署名
 

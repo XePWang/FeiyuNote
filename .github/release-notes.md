@@ -7,10 +7,10 @@
 
 下载下方 `.apk` 文件安装，在设置中填入自己的 DeepSeek API Key。界面跟随系统首选语言：中文使用中文，其他语言使用英语。数据存储在设备本地，提问时所选内容会发送给 DeepSeek。
 
-欢迎 Issue 和功能建议，暂不接受 PR。
+欢迎 Issue 和功能建议；贡献代码请先通过 Issue 与维护者确认范围，再提交 PR。详见[贡献指南](https://github.com/Yongzhaooo/FeiyuNote/blob/main/CONTRIBUTING.md)。
 
 Early preview of Feiyu Notes for Android 8.0+. Download the APK below and add your own DeepSeek API key in Settings. Chinese is used for a Chinese primary system language; all other languages use English. Data is stored locally; content selected for a request is sent to DeepSeek.
 
 Version 0.2 adds offline LaTeX rendering in conversations, notes, and HTML exports, with source-preserving copy and edit/preview modes. API-key protection uses Android Keystore and AES-256-GCM, excludes credentials from backups and device transfer, blocks ordinary Settings captures, detects damaged credentials, and redacts configuration strings. Release builds are not debuggable. Existing notes and credentials remain compatible with an in-place update.
 
-Issues and feature suggestions are welcome. Pull requests are not accepted at this stage.
+Issues and feature suggestions are welcome. Discuss scope with the maintainer in an Issue before submitting code contributions; see the [contribution guide](https://github.com/Yongzhaooo/FeiyuNote/blob/main/CONTRIBUTING.md#english).

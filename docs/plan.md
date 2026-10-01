@@ -181,3 +181,5 @@ P2/P3 各自定义自己的类型，不再等待 P1 固定数据模型；它们�
 - PHP110 真机：ADB 可连接，签名包安装遇到系统滑块人机验证，已向用户请求手动操作；中间包安装已取消，未声称真机验收通过。最终包由 Release 提供。
 
 - v0.2.0 发布验收（2026-10-01）：源代码标签 `22b5331`；[GitHub main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36823765077) 与 [发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36823765078) 均成功，约 22 MB 签名 APK 已上传到 [v0.2.0 Release](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)（非草稿、早期预览版）。已从 Release 下载实际附件，以 apksigner 验证签名有效，apkanalyzer 确认包名 com.feiyu.notes、versionCode 2、versionName 0.2.0、debuggable=false。最终附件同时放入 PHP110 的 Download/feiyu-notes-v0.2.0.apk，等待用户手动完成系统验证；未声称真机安装运行通过。本次后续文档提交不改变已验证的发布源码。
+
+- 贡献流程更新（2026-10-01）：按用户要求，从“暂不接受 PR”调整为“先 Issue 确认范围再贡献”。新增中英问题/功能表单、关联批准 Issue 的 PR 模板、CODEOWNERS，并在远端建立 approved 标签。自行 fork 无需批准；批准是上游接收意向，不承诺最终合并。CI 增加 pull_request → main 触发，构建任务只有 contents:read，checkout 不保留凭据；标签签名发布拆分到 needs:build 的独立任务，只在 push v* 时运行。未启用自动合并，也未修改 main 分支保护；CODEOWNERS 用于请求评审，不等于强制审批门禁。已解析 YAML 并断言事件、权限、密钥隔离与表单结构；本次无应用代码改动，不重复跑本地设备测试，远端新流程验证另行记录。

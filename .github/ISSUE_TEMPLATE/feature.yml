@@ -1,0 +1,29 @@
+name: 功能建议 / Feature request
+description: 先讨论需求和范围，再决定实现 / Discuss the need and scope before implementation
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: 欢迎只提建议。希望贡献代码时，请先等待维护者确认范围并添加 approved 标签；需求获批不保证 PR 一定合并。 / Suggestions without code are welcome. For upstream contributions, wait for confirmed scope and the approved label; proposal approval does not guarantee a merge.
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题 / Use case and problem
+      description: 当前哪里不方便？这个需求会在什么情况下出现？ / What is difficult today, and when does it happen?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望结果 / Desired outcome
+      description: 说明希望怎样改善；如有简单替代办法，也可以一起写。 / Describe the improvement and any simpler alternatives you considered.
+    validations:
+      required: true
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: 参与意愿 / Contribution interest
+      options:
+        - 仅提出建议 / Suggestion only
+        - 范围获批后愿意开发 / Willing to implement after scope approval
+        - 暂不确定 / Not sure yet
