@@ -65,10 +65,11 @@ class UiFlowTest {
     private val root = File(app.filesDir, "ui-test")
     private val inputs: MutableList<AiInput> = Collections.synchronizedList(mutableListOf())
     private var scenario: ActivityScenario<MainActivity>? = null
+    private var mathReply: String? = null
 
     private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { _, input ->
         inputs += input
-        if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
+        mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
     }
 
     @Before fun setUp() {
@@ -76,6 +77,7 @@ class UiFlowTest {
         localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("zh-CN")
         app.deleteDatabase(FeiyuApp.TEST_DATABASE)
         app.getSharedPreferences(FeiyuApp.TEST_PREFS, 0).edit().clear().commit()
+        app.getSharedPreferences(FeiyuApp.TEST_API_PREFS, 0).edit().clear().commit()
         root.deleteRecursively()
         app.installTestEnvironment(root, fakeModel)
         Intents.init()
@@ -93,6 +95,50 @@ class UiFlowTest {
     }
 
     // ---- flows ----
+
+    @Test fun formulasRenderInChatNotesAndOfflineExportWithoutChangingSource() {
+        val sample = "公式笔记\n行内 \\(x^2+\\sqrt{y}\\)\n\\[\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}\\]\n" +
+            "\\[\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}\\]\n\\[\\int_0^1 x^2\\,dx=\\frac{1}{3}\\]"
+        mathReply = sample
+        createNotebook("新建课程", "公式测试")
+        click("公式测试")
+        click("新课次")
+        shell("wm size 1080x2300")
+        ask("请解释这些公式")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 3 }
+        assertTrue(compose.onAllNodesWithTag("math-inline", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        val lessonId = app.prefs.lastLesson!!.second
+        assertEquals(sample, runBlocking { app.store.readEntries(lessonId).single { it.kind == EntryKind.ASSISTANT }.text })
+        screenshot("math-chat-phone")
+        compose.onNodeWithTag("copy-math-source").performScrollTo().performClick()
+        scenario!!.onActivity { activity ->
+            assertEquals(sample, activity.getSystemService(android.content.ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString())
+        }
+        click("整理本课")
+        click("开始整理")
+        waitText("公式笔记")
+        click("公式笔记")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 3 }
+        click("编辑")
+        compose.onNodeWithTag("note-editor").assertExists()
+        compose.onNodeWithTag("note-editor").performTextClearance()
+        val edited = sample + "\n\\[\\feiyuInvalid{x}\\]"
+        compose.onNodeWithTag("note-editor").performTextInput(edited)
+        compose.onNodeWithText("保存").performScrollTo().performClick()
+        waitText("已保存")
+        compose.onNodeWithText("预览").performScrollTo().performClick()
+        compose.onNodeWithText("\\[\\feiyuInvalid{x}\\]").assertExists()
+        val exported = File(app.cacheDir, "exports/math-export.html").apply { parentFile!!.mkdirs(); writeText("") }
+        intending(hasAction(Intent.ACTION_CREATE_DOCUMENT)).respondWith(
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(providerUri(exported)))
+        )
+        compose.onNodeWithText("导出 HTML").performScrollTo().performClick()
+        waitText("已导出")
+        val html = exported.readText()
+        assertTrue(html.contains("data:image/png;base64,") && html.contains("LaTeX 原文"))
+        assertTrue(html.contains("\\feiyuInvalid{x}"))
+        assertTrue(!html.contains("<script") && !html.contains("https://"))
+    }
 
     @Test fun courseFlowAskFollowUpExpandSummarizeEditExport() {
         createNotebook("新建课程", "高数")
@@ -117,6 +163,7 @@ class UiFlowTest {
 
         // Note: edit, save, export (stubbed save dialog) and share (stubbed chooser).
         click("笔记正文")
+        click("编辑")
         compose.onNodeWithTag("note-editor").performTextClearance()
         compose.onNodeWithTag("note-editor").performTextInput("改过的笔记 <b>")
         click("保存")
@@ -211,6 +258,9 @@ class UiFlowTest {
 
     @Test fun defaultTemplateAppliesToQuestionsNotSummaries() {
         click("设置")
+        scenario!!.onActivity { activity ->
+            assertTrue(activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)
+        }
         click("讲解模板")
         click("新建")
         compose.onNodeWithTag("text-input").performTextInput("严格")
@@ -360,6 +410,7 @@ class UiFlowTest {
     private fun ask(text: String) {
         compose.onNodeWithTag("composer-input").performTextInput(text)
         compose.onNodeWithTag("send").performClick()
+        hideKeyboard()
     }
 
     private fun click(text: String) {
@@ -376,6 +427,13 @@ class UiFlowTest {
 
     /** A real BACK key event, routed like the system back gesture. */
     private fun systemBack() {
+        hideKeyboard()
+        Espresso.pressBack()
+        compose.waitForIdle()
+    }
+
+    /** Read answers with the IME dismissed, independent of the AVD's keyboard preference. */
+    private fun hideKeyboard() {
         scenario!!.onActivity { activity ->
             androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView)
                 .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
@@ -388,7 +446,6 @@ class UiFlowTest {
             }
             !visible
         }
-        Espresso.pressBack()
         compose.waitForIdle()
     }
 

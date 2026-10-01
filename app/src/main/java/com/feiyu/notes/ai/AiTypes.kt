@@ -20,7 +20,9 @@ data class AiConfig(
     val apiKey: String,
     val model: String = AiDefaults.MODEL,
     val endpoint: String = AiDefaults.ENDPOINT,
-)
+) {
+    override fun toString(): String = "AiConfig(apiKey=<redacted>, model=$model, endpoint=$endpoint)"
+}
 
 /** Central defaults (spec §6). Endpoint is fixed; the model is user-editable. */
 object AiDefaults {

@@ -3,6 +3,7 @@ package com.feiyu.notes.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.LocalActivity
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,8 @@ import com.feiyu.notes.app
 import com.feiyu.notes.ai.AiDefaults
 import com.feiyu.notes.settings.ApiSettings
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -31,15 +34,39 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
+    val activity = LocalActivity.current
+    DisposableEffect(activity) {
+        val window = activity?.window
+        val flag = android.view.WindowManager.LayoutParams.FLAG_SECURE
+        val wasSecure = window != null && window.attributes.flags and flag != 0
+        window?.addFlags(flag)
+        onDispose { if (!wasSecure) window?.clearFlags(flag) }
+    }
     var hasKey by remember { mutableStateOf(settings.hasKey()) }
     // Credentials stay in memory; never put a typed key in saved-instance-state.
     var newKey by remember { mutableStateOf("") }
     var model by rememberSaveable { mutableStateOf(settings.model()) }
     var saved by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var avatarBusy by remember { mutableStateOf(false) }
     var avatarMessage by remember { mutableStateOf<String?>(null) }
     var showLicense by remember { mutableStateOf(false) }
+    fun saveKey(key: String?) {
+        val selectedModel = model.ifBlank { AiDefaults.MODEL }
+        saving = true
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    settings.save(key, selectedModel)
+                    settings.hasKey()
+                }
+            }.onSuccess {
+                newKey = ""; hasKey = it; model = selectedModel; saved = true; error = null
+            }.onFailure { error = context.getString(R.string.save_failed) }
+            saving = false
+        }
+    }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
             avatarBusy = true
@@ -63,31 +90,25 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
                 SettingsSection(context.getString(R.string.deepseek_connection)) {
                     Text(context.getString(if (hasKey) R.string.key_configured else R.string.key_missing), style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(
+                        enabled = !saving,
                         value = newKey,
                         onValueChange = { newKey = it; saved = false; error = null },
                         label = { Text(if (hasKey) context.getString(R.string.replace_key) else "API Key") },
                         supportingText = { Text(context.getString(R.string.key_private)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                         modifier = Modifier.fillMaxWidth().testTag("api-key"),
                     )
                     OutlinedTextField(
+                        enabled = !saving,
                         value = model, onValueChange = { model = it; saved = false },
                         label = { Text(context.getString(R.string.model_name, AiDefaults.MODEL)) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            runCatching { settings.save(newKey.takeIf { it.isNotBlank() }, model.ifBlank { AiDefaults.MODEL }) }
-                                .onSuccess {
-                                    newKey = ""; hasKey = settings.hasKey(); model = settings.model(); saved = true; error = null
-                                }.onFailure { error = context.getString(R.string.save_failed) }
-                        }) { Text(context.getString(R.string.save)) }
-                        if (hasKey) TextButton(onClick = {
-                            runCatching { settings.save("", model) }.onSuccess { hasKey = false; saved = false }
-                                .onFailure { error = context.getString(R.string.save_failed) }
-                        }) { Text(context.getString(R.string.clear_key)) }
+                        Button(enabled = !saving, onClick = { saveKey(newKey.takeIf { it.isNotBlank() }) }) { Text(context.getString(R.string.save)) }
+                        if (hasKey) TextButton(enabled = !saving, onClick = { saveKey("") }) { Text(context.getString(R.string.clear_key)) }
                     }
                     if (saved) Text(context.getString(R.string.saved), color = MaterialTheme.colorScheme.primary)
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

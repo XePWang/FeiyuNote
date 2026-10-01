@@ -2,6 +2,10 @@
 
 **Project outcome:** 学生在安卓手机、平板或折叠屏上，按课程和课次拍照或从相册选图提问、获得 DeepSeek 讲解并主动整理成本地复习笔记；刷题本支持错题讲解和掌握状态。范围与验收以 [spec](spec.md) 为准，工作项与证据以 [plan](plan.md) 为准。
 
+## In progress
+
+**0.2 公式渲染与凭据保护** — running; resume: 19 项 JVM 测试、30 项设备/界面测试和签名 release 构建通过，见 [plan](plan.md#执行记录)；next: 推送 main 与 v0.2.0，确认 GitHub 发布 CI 和 APK。
+
 ## Next actions
 
 - **回答中的 Markdown 加粗残留** — Generator 已为新请求加入纯文本指令，历史回答不自动改写。若仍有反馈，再考虑显示/导出处理；入口为 `Generator.kt` 与 `NoteExporter.kt`，验证走既有本地 CI。
@@ -9,7 +13,9 @@
 
 ## Waiting
 
-**备用机基础检查** — PHP110 在安装前从 ADB 断开，尚未在真机安装或运行本版；clearing: 重新连接并授权 USB 调试；supplier: 用户。
+**备用机基础检查** — PHP110 已重新连接，但安装要求用户完成系统滑块拼图验证；未安装待测中间包，后续安装最终 Release APK；clearing: 用户可在手机上完成验证；supplier: 用户。
+
+**原模拟器残留占用** — 原 Feiyu_Fold_API36 的进程无法正常结束且仍占用 5554/文件锁，数据盘保留；CI 已使用独立 Feiyu_CI_API36（5556）；clearing: 用户方便时重启 Windows 后检查原实例；supplier: 本机环境。
 
 **真实折叠态验收** — 模拟器 `device_state` 切到 CLOSED 后外屏黑屏，折叠与铰链遮挡目前由界面测试中的宽窄窗口切换代替；clearing: 可用的折叠真机或能正常折叠的模拟器镜像；supplier: 用户。
 

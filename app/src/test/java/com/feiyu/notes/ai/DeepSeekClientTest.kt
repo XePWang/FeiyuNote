@@ -24,6 +24,10 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /** P3: request shape and error mapping against a local mock server; synthetic data only. */
 class DeepSeekClientTest {
+    @Test fun configurationStringDoesNotExposeKey() {
+        val rendered = AiConfig(apiKey = "synthetic-secret").toString()
+        assertTrue(!rendered.contains("synthetic-secret") && rendered.contains("<redacted>"))
+    }
     private lateinit var server: MockWebServer
     private val image = File.createTempFile("photo", ".jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
 

@@ -20,6 +20,12 @@ Copyright 2014–2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'So
 
 The font is distributed under **SIL Open Font License 1.1**. [Source](https://github.com/google/fonts/tree/main/ofl/notosanssc).
 
-## Android libraries
+## JLaTeXMath Android
+
+离线公式渲染使用 [JLaTeXMath Android 0.2.0](https://github.com/noties/jlatexmath-android)，作者 Dimitry Ivanov；基于 JLaTeXMath（Calixte Denizet、Kris Coolsaet、Nico Van Cleemput、Kurt Vermeulen、Universiteit Gent）。采用 **GPL-2.0-or-later，附带链接例外**，许可原文随应用分发于 [JLaTeXMath-LICENSE.txt](app/src/main/assets/licenses/JLaTeXMath-LICENSE.txt)。
+
+Offline formula rendering uses JLaTeXMath Android under GPL-2.0-or-later with a linking exception. Its bundled math fonts retain their own licenses, distributed in the APK under `org/scilab/forge/jlatexmath/fonts/licences/` (Knuth, dsrom and SIL OFL notices).
+
+## Other Android libraries
 
 AndroidX、Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization 和 OkHttp 使用 Apache-2.0 许可。依赖和版本见 [版本目录](gradle/libs.versions.toml)。

@@ -8,13 +8,13 @@
 #>
 param(
     [switch]$Full,
-    [string]$Serial = 'emulator-5554',
-    [string]$Avd = 'Feiyu_Fold_API36'
+    [string]$Serial = 'emulator-5556',
+    [string]$Avd = 'Feiyu_CI_API36'
 )
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
-if ($Serial -ne 'emulator-5554') { throw 'This pipeline only targets emulator-5554.' }
+if ($Serial -notmatch '^emulator-\d+$') { throw 'This pipeline only targets an explicitly named Android emulator, never a physical phone.' }
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -23,6 +23,10 @@ if (-not $env:JAVA_HOME) {
     $env:JAVA_HOME = (Get-ChildItem "$env:USERPROFILE\.jdks" -Directory -Filter 'jdk-21*' | Select-Object -First 1).FullName
 }
 if (-not $env:ANDROID_HOME) { $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk" }
+if (-not (Test-Path "$env:JAVA_HOME\bin\java.exe")) { throw 'JDK 21 is missing. Set JAVA_HOME to a persistent JDK installation.' }
+if (-not (Test-Path "$env:ANDROID_HOME\platforms\android-37.0\android.jar")) {
+    throw 'Android SDK 37.0 is missing. Run pwsh -File scripts/setup-sdk.ps1 (add -WithEmulator to restore the emulator tools/image).'
+}
 $adb = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'
 if (-not (Test-Path -LiteralPath $adb)) { $adb = (Get-Command adb -ErrorAction Stop).Source }
 $emulator = Join-Path $env:ANDROID_HOME 'emulator\emulator.exe'
@@ -44,14 +48,20 @@ Invoke-Step 'Gradle: unit tests, app and test APKs' {
 
 if ($Full) {
     Invoke-Step "Emulator $Serial" {
-        $online = (& $adb devices) -match "^$Serial\s+device"
-        if (-not $online) {
+        $present = (& $adb devices) -match "^$Serial\s+(device|offline)"
+        if (-not $present) {
             Write-Host "    starting $Avd headless"
-            Start-Process -FilePath $emulator -ArgumentList '-avd', $Avd, '-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot-save' -WindowStyle Hidden
-            & $adb -s $Serial wait-for-device
+            Start-Process -FilePath $emulator -ArgumentList '-avd', $Avd, '-port', $Serial.Substring(9), '-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot-save' -WindowStyle Hidden
         }
         $deadline = (Get-Date).AddMinutes(3)
-        while ((& $adb -s $Serial shell getprop sys.boot_completed 2>$null) -ne '1') {
+        while ($true) {
+            $probeLog = Join-Path $logDir 'boot-status.txt'
+            $probe = Start-Process -FilePath $adb -ArgumentList '-s', $Serial, 'shell', 'getprop', 'sys.boot_completed' -PassThru -WindowStyle Hidden -RedirectStandardOutput $probeLog -RedirectStandardError (Join-Path $logDir 'boot-error.txt')
+            if (-not $probe.WaitForExit(10000)) {
+                $probe.Kill()
+                throw "emulator $Serial ADB shell is unresponsive; restart the existing AVD without wiping data, then rerun CI."
+            }
+            if ((Get-Content $probeLog -Raw) -match '^\s*1\s*$') { break }
             if ((Get-Date) -gt $deadline) { throw "emulator $Serial did not finish booting" }
             Start-Sleep -Seconds 2
         }
@@ -82,7 +92,7 @@ if ($Full) {
     Invoke-Step 'UI screenshots' {
         $screenshots = Join-Path $logDir 'screenshots'
         New-Item -ItemType Directory -Force $screenshots | Out-Null
-        foreach ($name in @('chat-en-phone', 'chat-zh-phone')) {
+        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone')) {
             & $adb -s $Serial pull "/sdcard/Android/data/com.feiyu.notes/files/ui-evidence/$name.png" (Join-Path $screenshots "$name.png")
             if ($LASTEXITCODE -ne 0) { throw "Missing UI screenshot: $name" }
         }

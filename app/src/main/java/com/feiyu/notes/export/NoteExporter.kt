@@ -1,13 +1,28 @@
 package com.feiyu.notes.export
 
+import com.feiyu.notes.math.MathText
+
 /**
  * One note as a static, script-free HTML page (spec §7). Entry IDs are not exported.
  * Pure function: no access to keys, storage or other notebooks.
  */
 object NoteExporter {
-    fun renderNote(notebookName: String, lessonTitle: String, noteText: String, exportedOn: String, language: String = "zh"): String {
+    fun renderNote(notebookName: String, lessonTitle: String, noteText: String, exportedOn: String, language: String = "zh",
+                   formulaImage: (String) -> String? = { null }): String {
         val title = escape("$notebookName · $lessonTitle")
-        val body = stripEntryIds(noteText).lines().joinToString("\n") { line -> if (line.isBlank()) "<br>" else "<p>${escape(line)}</p>" }
+        val source = stripEntryIds(noteText)
+        val parts = MathText.parse(source)
+        val body = parts.joinToString("") { part ->
+            val image = (part as? MathText.Formula)?.let { formulaImage(it.latex) }
+                ?.takeIf { it.startsWith("data:image/png;base64,") }
+            if (image == null) escape(part.raw)
+            else {
+                val tag = "<img src=\"${escape(image)}\" alt=\"${escape(part.raw)}\" title=\"${escape(part.raw)}\">"
+                if ((part as MathText.Formula).display) "<div class=\"math\">$tag</div>" else tag
+            }
+        }
+        val original = if (parts.any { it is MathText.Formula })
+            "<details><summary>${if (language == "zh") "LaTeX 原文" else "LaTeX source"}</summary><pre>${escape(source)}</pre></details>" else ""
         return """
             <!DOCTYPE html>
             <html lang="${if (language == "zh") "zh-CN" else "en"}">
@@ -21,7 +36,12 @@ object NoteExporter {
             h1 { font-size: 1.3em; margin: 0 0 4px; }
             .meta { color: #666; font-size: 0.9em; margin-bottom: 8px; }
             p { margin: 0 0 0.4em; white-space: pre-wrap; word-break: break-word; }
-            @media (prefers-color-scheme: dark) { body { background: #121212; color: #e6e6e6; } .meta { color: #aaa; } }
+            main { white-space: pre-wrap; overflow-wrap: anywhere; }
+            main img { zoom: .5; vertical-align: middle; max-width: 200%; }
+            .math { overflow-x: auto; margin: 12px 0; }
+            .math img { max-width: none; }
+            details { margin-top: 24px; } pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+            @media (prefers-color-scheme: dark) { body { background: #121212; color: #e6e6e6; } .meta { color: #aaa; } main img { filter: invert(1) hue-rotate(180deg); } }
             </style>
             </head>
             <body>
@@ -32,6 +52,7 @@ object NoteExporter {
             <main>
             $body
             </main>
+            $original
             </body>
             </html>
         """.trimIndent() + "\n"

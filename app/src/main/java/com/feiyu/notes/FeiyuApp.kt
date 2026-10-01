@@ -24,7 +24,8 @@ import java.io.File
 /** Sole holder of app-scoped singletons, built by hand (no DI framework). */
 class FeiyuApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    val apiSettings by lazy { ApiSettings(this) }
+    lateinit var apiSettings: ApiSettings
+        private set
 
     lateinit var avatars: com.feiyu.notes.settings.AvatarFiles
         private set
@@ -39,10 +40,12 @@ class FeiyuApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ru.noties.jlatexmath.JLatexMathAndroid.init(this)
         installProduction()
     }
 
     private fun installProduction() {
+        apiSettings = ApiSettings(this)
         install(
             filesRoot = filesDir,
             databaseName = NotebookDatabase.NAME,
@@ -58,6 +61,7 @@ class FeiyuApp : Application() {
      */
     @VisibleForTesting
     fun installTestEnvironment(root: File, generate: suspend (AiConfig, AiInput) -> AiReply) {
+        apiSettings = ApiSettings(this, TEST_API_PREFS, TEST_API_ALIAS)
         install(root, TEST_DATABASE, TEST_PREFS, loadConfig = { AiConfig(apiKey = "test") }, generate = generate)
     }
 
@@ -83,6 +87,8 @@ class FeiyuApp : Application() {
     companion object {
         const val TEST_DATABASE = "ui-test.db"
         const val TEST_PREFS = "ui_test_prefs"
+        const val TEST_API_PREFS = "ui_test_api_settings"
+        const val TEST_API_ALIAS = "feiyu_ui_test_api_key"
     }
 }
 

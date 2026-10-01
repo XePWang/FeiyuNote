@@ -17,6 +17,7 @@ androidxTestRunner = "1.7.0"
 espresso = "3.7.0"
 
 [libraries]
+jlatexmath = { module = "ru.noties:jlatexmath-android", version = "0.2.0" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }

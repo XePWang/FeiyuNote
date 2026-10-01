@@ -66,10 +66,12 @@ fun NoteScreen(
     var text by rememberSaveable(noteId) { mutableStateOf<String?>(null) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var editing by rememberSaveable(noteId) { mutableStateOf(false) }
     LaunchedEffect(note?.id) { if (text == null) note?.let { text = it.text } }
 
     fun html(): String = NoteExporter.renderNote(
         notebook?.name.orEmpty(), lesson?.title.orEmpty(), note?.text.orEmpty(), LocalDate.now().toString(), context.resources.configuration.locales[0].language,
+        formulaImage = com.feiyu.notes.math.MathRenderer::dataUri,
     )
     val fileName = NoteExporter.fileName(notebook?.name.orEmpty(), lesson?.title.orEmpty())
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
@@ -100,14 +102,17 @@ fun NoteScreen(
             Modifier.padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(16.dp).widthIn(max = 840.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
+            if (editing) OutlinedTextField(
                 value = text.orEmpty(),
                 onValueChange = { text = it },
                 label = { Text(context.getString(R.string.note_content)) },
                 minLines = 8,
                 modifier = Modifier.fillMaxWidth().testTag("note-editor"),
-            )
+            ) else MathContent(text.orEmpty())
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { editing = !editing }) {
+                    Text(context.getString(if (editing) R.string.preview_note else R.string.edit_note))
+                }
                 Button(enabled = dirty, onClick = {
                     scope.launch { message = if (store.updateNoteText(noteId, text.orEmpty())) context.getString(R.string.saved) else context.getString(R.string.save_failed) }
                 }) { Text(context.getString(R.string.save)) }

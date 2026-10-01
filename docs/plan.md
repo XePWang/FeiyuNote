@@ -174,3 +174,8 @@ P2/P3 各自定义自己的类型，不再等待 P1 固定数据模型；它们�
 - 发布构建（2026-10-01）：本地 `assembleRelease --no-configuration-cache` 和 `lintVitalRelease` 通过，签名 APK 约 22 MB；[GitHub main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36784905890) 的单元测试、debug 编译与 APK 上传通过。首次远端失败来自 SDK 安装 action 请求已移除的 tools 包，已改为 platform-tools。备用机 PHP110 在安装前断开，未进行真机验收。
 
 - [v0.1.0-alpha.1 发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36785654962) 成功：标签 `9fd23ea` 的代码在 GitHub 构建并签名，APK 已上传 [Release](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)，为非草稿预览版。签名密钥保留于仓库外并以 GitHub Secrets 提供，未提交到仓库。后续本次提交只更新验收文档，沿用已通过的检查。
+
+- 0.2 本地验收（2026-10-01）：`pwsh -NoProfile -File scripts/ci.ps1 -Full -Serial emulator-5556 -Avd Feiyu_CI_API36` 通过，JVM 19 项，仪器/界面 runner 为 OK (30 tests)，真实 API 冒烟默认跳过。原生 JLaTeXMath 共用于聊天、笔记与 HTML 导出，窄屏截图 `build/ci/screenshots/math-chat-phone.png` 已检查；覆盖行内/独立公式、分数/根号/积分/矩阵、原文复制、编辑预览、无效语法回退与离线导出。修复 Android ICU 对正则闭合花括号的严格转义要求；界面测试主动收起软键盘，不依赖 AVD 的输入法偏好。
+- 0.2 凭据验收：独立合成 Key 验证 AES-256-GCM 密文落盘、随机 IV、Android Keystore 密钥不可导出、私有文件 UID/权限、篡改拒绝、丢失密钥后重新输入、禁止备份与 FileProvider 隔离。设置页 FLAG_SECURE 由界面测试检查；配置字符串脱敏由 JVM 测试检查。生产 Key 的别名和密文格式保持不变，未读取用户真实 Key。签名 release 构建和 lintVitalRelease 通过，最终打包完成；使用原发布签名。
+- SDK 恢复（2026-10-01）：原 SDK 目录缺失，原因未确认。已恢复持久目录中的平台 37.0、build-tools 36.0.0、platform-tools、模拟器及 API 36 镜像；新增 `scripts/setup-sdk.ps1 [-WithEmulator]`，固定可用的 Java SDK 管理器 19.0，校验官方下载归档并统一 ANDROID_HOME/local.properties。首次镜像下载在 Java HTTPS 读取中停滞，改用官方归档恢复后再次运行恢复脚本成功。原 AVD 遗留无响应进程/文件锁，保留其用户数据，独立建立 Feiyu_CI_API36；CI 默认 5556，只接受模拟器目标，并检查环境和限制启动探测等待时间。原 5554 占用可能需要 Windows 重启释放。
+- PHP110 真机：ADB 可连接，签名包安装遇到系统滑块人机验证，已向用户请求手动操作；中间包安装已取消，未声称真机验收通过。最终包由 Release 提供。

@@ -5,6 +5,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NoteExporterTest {
+    @Test fun formulaExportEmbedsImagesAndKeepsSafeSource() {
+        val html = NoteExporter.renderNote("n", "l", "Formula \\(x<y\\)\n\\[\\frac{1}{2}\\] <script>", "d", "en") {
+            "data:image/png;base64,aGVsbG8="
+        }
+        assertTrue(html.contains("<img src=\"data:image/png;base64,"))
+        assertTrue(html.contains("alt=\"\\(x&lt;y\\)\""))
+        assertTrue(html.contains("<div class=\"math\">"))
+        assertTrue(html.contains("LaTeX source"))
+        assertFalse(html.contains("<script>"))
+        val fallback = NoteExporter.renderNote("n", "l", "\\[\\bad{\\]", "d")
+        assertTrue(fallback.contains("\\[\\bad{\\]"))
+        assertFalse(fallback.contains("<img"))
+    }
+
     @Test fun escapesAndHasNoScriptOrIds() {
         val html = NoteExporter.renderNote(
             notebookName = "高数<一>",

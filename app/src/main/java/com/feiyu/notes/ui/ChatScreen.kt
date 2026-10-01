@@ -231,7 +231,7 @@ fun EntryCard(
                     }
                 }
             }
-            if (entry.text.isNotBlank()) SelectionContainer { Text(entry.text, style = MaterialTheme.typography.bodyLarge) }
+            if (entry.text.isNotBlank()) MathContent(entry.text)
             vm.photoFile(entry)?.let { PhotoThumb(it) }
             if (isUser) UserMeta(entry, all, templates)
             if (entry.kind == EntryKind.ASSISTANT && !readOnly) AssistantActions(entry, all, practice, vm, onRetry)

@@ -177,4 +177,9 @@
     <string name="error_response">Could not read the response. Check the model name and try again.</string>
     <string name="error_image">Cannot read the photo. Please choose it again.</string>
     <string name="response_language">Respond in English unless the student explicitly requests another language. Do not use Markdown bold markers, headings or code fences.</string>
+    <string name="copy_math_source">Copy text with LaTeX</string>
+    <string name="copied">Copied</string>
+    <string name="edit_note">Edit</string>
+    <string name="preview_note">Preview</string>
+    <string name="scroll_formula">Swipe horizontally to see the full formula</string>
 </resources>

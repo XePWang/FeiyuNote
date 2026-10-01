@@ -18,12 +18,15 @@ Download the APK from [Releases](https://github.com/Yongzhaooo/FeiyuNote/release
 
 Notes, photos, and conversations are stored on your device. API keys are encrypted with Android Keystore. When you request an answer, the selected question, context, and images are sent to DeepSeek.
 
+API keys are stored as AES-256-GCM ciphertext in private app storage, with a non-exportable encryption key managed by Android Keystore. Credentials are excluded from backup and device transfer; Settings blocks ordinary screenshots and screen recordings. Release APKs are not debuggable. Ordinary apps cannot read private credentials. Damaged ciphertext or a lost Keystore key requires entering the API key again.
+
 ## Interface
 
 - Uses Chinese when the primary system language is Chinese, and English otherwise.
 - Single-pane phone and two-pane large-screen layouts, with light and dark themes.
 - A random whale-girl portrait stays with each session. You can select a custom avatar in Settings.
 - Noto Sans SC font; offline note reading, editing, HTML export, and sharing.
+- Version 0.2 renders LaTeX offline: `$...$` or `\(...\)` inline, and `$$...$$` or `\[...\]` for display equations. Common fractions, roots, integrals, and matrices are supported; wide equations scroll horizontally. Notes have edit/preview modes, copying preserves source, and HTML exports embed formula images. Unsupported syntax remains readable as source. Full TeX documents and custom macros are not supported.
 
 ## Build and verify
 
@@ -36,9 +39,11 @@ bash ./gradlew testDebugUnitTest assembleDebug
 # Windows: unit tests, app/test APK builds, and a dist artifact
 pwsh -NoProfile -File scripts/ci.ps1
 
-# Full instrumented and UI tests on emulator-5554
+# Full instrumented and UI tests on the isolated emulator-5556
 pwsh -NoProfile -File scripts/ci.ps1 -Full
 ```
+
+On Windows, run `pwsh -File scripts/setup-sdk.ps1` to install or repair the SDK; add `-WithEmulator` to restore the tools/image and create the isolated `Feiyu_CI_API36` AVD if missing. The script installs into persistent storage (default `%LOCALAPPDATA%\Android\Sdk`), aligns user `ANDROID_HOME` with `local.properties`, and preserves existing AVDs and app data. CI defaults to `emulator-5556`, accepts only explicitly named emulators, checks the JDK and platform package, and times out unresponsive ADB calls. Keep the SDK, JDK, and `%USERPROFILE%\.android\avd` out of temporary-file cleanup jobs.
 
 Full local CI uses isolated data and fake responses, without paid API calls. Screenshots are saved to `build/ci/screenshots/`. Enable the optional Git hooks with `git config core.hooksPath .githooks`.
 

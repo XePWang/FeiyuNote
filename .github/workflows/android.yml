@@ -48,6 +48,7 @@ jobs:
           FEIYU_KEY_PASSWORD: ${{ secrets.FEIYU_KEY_PASSWORD }}
         run: |
           bash ./gradlew assembleRelease --no-configuration-cache --console=plain
+          test "$(apkanalyzer manifest debuggable app/build/outputs/apk/release/app-release.apk)" = "false"
           cp app/build/outputs/apk/release/app-release.apk "feiyu-notes-${GITHUB_REF_NAME}.apk"
       - name: Publish early release
         if: startsWith(github.ref, 'refs/tags/v')
