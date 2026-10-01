@@ -11,7 +11,7 @@
 
 ## Waiting
 
-**设备安装与界面检查** — PHP110 当前显示 Shizuku 安装确认，0.3.0 的 ADB 安装仍在等待；备用 APK 在 `Download/feiyu-notes-v0.3.0.apk`。TB321FU 已安装 versionCode 3，启动命令成功，界面仍受锁屏阻挡。clearing: 用户处理手机安装提示并解锁平板；supplier: 用户。
+**设备安装与界面检查** — TB321FU 已覆盖安装 0.3.1（versionCode 4）。PHP110 锁屏中，ADB 安装未得到确认，尚未装上；备用 APK 在 `Download/feiyu-notes-v0.3.1.apk`。真机界面（字重、字号、跳转节点）未人工检查。clearing: 用户解锁手机并确认安装；supplier: 用户。
 
 **原模拟器残留占用** — Feiyu_Fold_API36 进程仍占用 5554/文件锁，原数据盘保留；CI 使用独立 Feiyu_CI_API36（5556）；clearing: 重启 Windows 后检查原实例；supplier: 本机环境。
 
@@ -19,6 +19,7 @@
 
 ## Done (rolling)
 
+- **0.3.1 公共聊天与阅读设置（2026-10-01）** — 公共聊天、默认 V4.1 Flash + low/high/max 三档推理强度（默认 low，设置可改、会话可覆盖）、连接测试、问答配对编号、右侧跳转节点、语言/主题/字号与字重修复随 [v0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1) 发布；验证见 [plan](plan.md#执行记录)。
 - **0.3 多图附件（2026-10-01）** — 多选、追加拍照、移除、旧库迁移与双语版本记录已随 [v0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0) 发布；本地/远端 CI 和实际 APK 验证见 [plan](plan.md#执行记录)。
 
 - **贡献流程与 PR CI（2026-10-01）** — Issue 表单、批准范围后提交 PR 的流程及只读构建已配置；入口见 [贡献指南](../CONTRIBUTING.md)，验证见 [执行记录](plan.md#执行记录)。
