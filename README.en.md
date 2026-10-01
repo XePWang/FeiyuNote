@@ -30,7 +30,7 @@ API keys use AES-256-GCM encryption in private storage, with non-exportable encr
 
 ## Version history
 
-- **0.3.0**: Attach multiple images to one question. Select several photos, append camera captures, preview and remove individual attachments. Failed imports keep the other images. Existing single-image notes migrate automatically; retry and deletion handle all attachments. Uses the system photo picker without full-library permission.
+- **[0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0)**: Attach multiple images to one question. Select several photos, append camera captures, preview and remove individual attachments. Failed imports keep the other images. Existing single-image notes migrate automatically; retry and deletion handle all attachments. Uses the system photo picker without full-library permission.
 - **[0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)**: Offline LaTeX in conversations, notes, and exports; edit/preview modes and source copying; improved API-key encryption and credential protection.
 - **[0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)**: Course/session conversations, practice notebooks, note summaries and exports; Chinese/English UI, whale avatars, and adaptive layouts.
 

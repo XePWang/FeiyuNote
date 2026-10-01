@@ -37,7 +37,7 @@ SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulat
 
 以下为截至 2026-10-01 的验证结果，不代表所有真实设备场景均已验收。
 
-### 本地功能与安全
+### 0.2 本地功能与安全
 
 - 完整命令 `pwsh -NoProfile -File scripts/ci.ps1 -Full -Serial emulator-5556 -Avd Feiyu_CI_API36` 通过；JVM 单测 19 项，仪器/界面 runner 报告 `OK (30 tests)`，其中真实 API 冒烟默认跳过。
 - 自动化覆盖问答、追问、展开、整理、笔记编辑/导出/分享、相机相册打桩、刷题本、模板、归档删除、冷启动恢复、单双栏切换与草稿保留，以及首选语言和随机/自定义头像。
@@ -49,6 +49,7 @@ SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulat
 
 | 版本 / 提交 | 验证证据 |
 | --- | --- |
+| [v0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0) · `0f440de` | [main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36884434892)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36884438952) 通过。实际 Release APK 已下载验签，包名 `com.feiyu.notes`、versionCode 3、versionName 0.3.0、debuggable=false。TB321FU 已安装；手机安装与真机界面检查待系统交互，见 Wayfinder。 |
 | [v0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1) · `9fd23ea` | [main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36784905890)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36785654962) 通过，签名预览 APK 已发布。 |
 | [v0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0) · `22b5331` | 本地签名 release 构建及 `lintVitalRelease`、[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36823765077)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36823765078) 通过。下载实际 Release APK 后用 `apksigner` 验证签名，`apkanalyzer` 确认包名 `com.feiyu.notes`、versionCode 2、versionName 0.2.0、debuggable=false。 |
 | 贡献流程 · `287191f` | [CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36835816719) 单测、debug 构建和 APK 上传通过，main 推送正确跳过 release；CODEOWNERS 检查无错误，`approved` 标签已建立。 |
