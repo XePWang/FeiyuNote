@@ -454,6 +454,8 @@ class UiFlowTest {
         compose.onNodeWithTag("prompt-editor").performTextInput("自定义公共提示")
         compose.onNodeWithTag("prompt-save").performClick()
         waitText("已修改")
+        // Let the dialog window go first, or BACK is delivered to it instead of the screen.
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("prompt-editor").fetchSemanticsNodes().isEmpty() }
         systemBack()
 
         // "公共聊天" is also a prompt row in Settings; open the home card by tag once home is back.
