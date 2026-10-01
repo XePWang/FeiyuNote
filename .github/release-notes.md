@@ -1,14 +1,14 @@
-肥鱼笔记 0.3.0，支持 Android 8.0 及以上。项目仍处于早期预览阶段。
+肥鱼笔记 0.3.2，支持 Android 8.0 及以上。项目仍处于早期预览阶段。
 
-- 一条提问可附多张图片：相册一次多选，继续拍照追加，发送前逐张预览和移除。
-- 导入失败会提示并保留其他图片；多图支持重试，删除线程或课次时清理全部附件。
-- 旧单图记录自动迁移，保留已有文字、照片与问答关系；凭据格式不变。
-- 使用系统照片选择器，无需授予整个相册的读取权限。中英文 README 新增版本记录与后续方向。
+- 设置新增“关于与帮助”：显示当前版本，可手动检查更新，有新版时打开独立下载页 <https://feiyunote.cangming.fyi/feiyu/>，不需要访问 GitHub。
+- 应用内反馈问题：填写描述后可选择附带诊断信息（默认不附带），提交前先预览，成功后显示反馈编号。草稿保存在本机，发送失败可重试，不会重复提交；网络不可用时也可以通过系统分享或复制发出。反馈页提供 QQ 讨论群 1079399140。
+- 本机保存有大小和期限上限的诊断记录，只记录操作和错误类型，不含 API Key、聊天、笔记或图片，不会自动上传。应用意外退出后，下次启动会提示查看或忽略。
+- 输入区的模型标签缩短为 `dsf.low` 这类形式，窄屏不再换行；公共聊天的“整理本课”改为“整理对话”；很长的对话只发送最近部分的历史，避免超出接口上限。
 
-下载下方 APK 安装，在设置中填入自己的 DeepSeek API Key。数据保存在本地，提问时所选内容会发送给 DeepSeek。已有安装可覆盖升级。
+0.3.1 没有检查更新入口，请通过上面的下载页或本页下方的 APK 覆盖安装，笔记、照片和设置都会保留。数据保存在本地，提问时所选内容会发送给 DeepSeek。
 
 欢迎[提出功能建议](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=feature.yml)；贡献代码前请通过 Issue 确认范围，详见[贡献指南](https://github.com/Yongzhaooo/FeiyuNote/blob/main/CONTRIBUTING.md)。
 
-Feiyu Notes 0.3.0 is an early preview for Android 8.0+. Attach multiple images to one question: select several photos, append camera captures, and preview or remove each attachment before sending. Failed imports keep other images; retry and deletion handle the full attachment list. Existing single-image records migrate automatically, and credentials remain compatible. The system photo picker requires no full-library permission.
+Feiyu Notes 0.3.2 is an early preview for Android 8.0+. Settings now has About and help: see your version, check for updates manually, and open the independent download page (<https://feiyunote.cangming.fyi/feiyu/>, no GitHub needed). Report a problem inside the app with optional diagnostics (off by default), a preview before sending and a report number on success; drafts survive failures, retries never duplicate a report, and you can share or copy the report when offline. Bounded local diagnostics record only operation and error types, never your API key, chats, notes or images, and nothing is uploaded automatically; after an unexpected exit the app offers to review or ignore it. The composer model label is shorter (e.g. `dsf.low`), general chat says "Summarize chat", and very long chats send only recent history.
 
-Download the APK below and enter your DeepSeek API key in Settings. Data stays on your device; selected content is sent to DeepSeek when you ask a question. See the [README](https://github.com/Yongzhaooo/FeiyuNote/blob/main/README.en.md) for version history and planned directions, and the [contribution guide](https://github.com/Yongzhaooo/FeiyuNote/blob/main/CONTRIBUTING.md#english) before submitting code.
+Upgrade from 0.3.1 with the download page or the APK below; notes, photos and settings are kept. Data stays on your device; selected content is sent to DeepSeek when you ask a question. See the [README](https://github.com/Yongzhaooo/FeiyuNote/blob/main/README.en.md) and the [contribution guide](https://github.com/Yongzhaooo/FeiyuNote/blob/main/CONTRIBUTING.md#english).

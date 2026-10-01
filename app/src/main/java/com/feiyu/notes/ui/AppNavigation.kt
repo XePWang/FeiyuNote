@@ -1,6 +1,7 @@
 package com.feiyu.notes.ui
 
 import com.feiyu.notes.R
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -10,6 +11,11 @@ import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneSt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +43,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class ReviewListKey(val notebookId: Long) : NavKey
 @Serializable data object SettingsKey : NavKey
 @Serializable data object TemplatesKey : NavKey
+@Serializable data object SupportKey : NavKey
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -122,10 +129,32 @@ fun AppNavigation(initial: List<NavKey>) {
                 SettingsScreen(
                     settings = app.apiSettings,
                     onOpenTemplates = { backStack.add(TemplatesKey) },
+                    onOpenSupport = { backStack.add(SupportKey) },
                     navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), back) },
                 )
             }
             entry<TemplatesKey> { TemplateScreen(store = app.store, onBack = back) }
+            entry<SupportKey> {
+                SupportScreen(vm = viewModel(factory = viewModelFactory { initializer { SupportViewModel(app) } }), onBack = back)
+            }
+        },
+    )
+
+    // Spec §9 L02: offered once after a crash; viewing or ignoring both retire this crash's prompt.
+    var crashPrompt by rememberSaveable { mutableStateOf(app.diagnostics.hasPendingCrash()) }
+    if (crashPrompt) AlertDialog(
+        onDismissRequest = { app.diagnostics.dismissCrash(); crashPrompt = false },
+        title = { Text(context.getString(R.string.crash_title)) },
+        text = { Text(context.getString(R.string.crash_body)) },
+        confirmButton = {
+            TextButton(onClick = {
+                app.diagnostics.dismissCrash(); crashPrompt = false
+                app.feedbackDrafts.save(app.feedbackDrafts.load().copy(includeDiagnostics = true, pending = null))
+                backStack.add(SupportKey)
+            }, modifier = Modifier.testTag("crash-review")) { Text(context.getString(R.string.crash_view)) }
+        },
+        dismissButton = {
+            TextButton(onClick = { app.diagnostics.dismissCrash(); crashPrompt = false }) { Text(context.getString(R.string.crash_ignore)) }
         },
     )
 }

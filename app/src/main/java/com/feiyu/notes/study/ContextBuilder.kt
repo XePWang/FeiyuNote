@@ -16,6 +16,11 @@ import java.io.File
  * already-validated reference note and template contents.
  */
 object ContextBuilder {
+    /**
+     * Upper bound for prior messages in one request (about 60k tokens of Chinese text at worst), so a
+     * very long chat never exceeds the model's context window. The oldest messages go first.
+     */
+    const val HISTORY_CHAR_BUDGET = 60_000
 
     fun buildTurn(
         target: Entry,
@@ -29,13 +34,13 @@ object ContextBuilder {
         val chain = ancestors(target, lessonEntries)
         val onChain = chain.associateBy { it.id }
 
-        val history = chain.mapNotNull { e ->
+        val history = recent(chain.mapNotNull { e ->
             when {
                 e.kind == EntryKind.USER -> AiMessage(AiRole.USER, e.text.ifBlank { StudyPrompts.PHOTO_ONLY_PLACEHOLDER })
                 e.kind == EntryKind.ASSISTANT && e.state == EntryState.COMPLETE -> AiMessage(AiRole.ASSISTANT, e.text)
                 else -> null
             }
-        }
+        })
 
         // Own photo first, then user-selected photos from this chain only.
         val images = buildList {
@@ -82,6 +87,13 @@ object ContextBuilder {
     }
 
     /** Entries from the thread root down to (excluding) [target]. */
+    /** Newest messages whose text fits [budget]; never starts with an answer whose question was dropped. */
+    internal fun recent(history: List<AiMessage>, budget: Int = HISTORY_CHAR_BUDGET): List<AiMessage> {
+        var used = 0
+        val kept = history.asReversed().takeWhile { used += it.text.length; used <= budget }.asReversed()
+        return kept.dropWhile { it.role != AiRole.USER }
+    }
+
     fun ancestors(target: Entry, lessonEntries: List<Entry>): List<Entry> {
         val byId = lessonEntries.associateBy { it.id }
         val chain = ArrayDeque<Entry>()

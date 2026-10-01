@@ -4,3 +4,5 @@ gradlew text eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=lf
 *.yml text eol=lf
+# Deployed to Linux as-is: systemd units and the Caddy snippet need LF.
+services/** text eol=lf

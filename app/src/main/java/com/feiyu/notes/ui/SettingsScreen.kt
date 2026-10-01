@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigationIcon: @Composable () -> Unit) {
+fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, onOpenSupport: () -> Unit, navigationIcon: @Composable () -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
@@ -94,6 +94,7 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
             ) {
                 DisplaySettings()
                 OutlinedButton(onClick = onOpenTemplates, modifier = Modifier.fillMaxWidth()) { Text(context.getString(R.string.templates)) }
+                OutlinedButton(onClick = onOpenSupport, modifier = Modifier.fillMaxWidth().testTag("open-support")) { Text(context.getString(R.string.support_title)) }
                 SettingsSection(context.getString(R.string.deepseek_connection)) {
                     Text(context.getString(if (hasKey) R.string.key_configured else R.string.key_missing), style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(

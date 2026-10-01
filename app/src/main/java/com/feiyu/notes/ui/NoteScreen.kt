@@ -1,6 +1,8 @@
 package com.feiyu.notes.ui
 
 import com.feiyu.notes.R
+import com.feiyu.notes.app
+import com.feiyu.notes.support.DiagnosticOperation
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -83,7 +85,10 @@ fun NoteScreen(
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)!!.use { it.write(html().toByteArray(Charsets.UTF_8)) }
                 }
-            }.fold({ context.getString(R.string.exported) }, { context.getString(R.string.export_failed) })
+            }.fold({ context.getString(R.string.exported) }, {
+                context.app.diagnostics.recordFailure(DiagnosticOperation.NOTE_EXPORT, it)
+                context.getString(R.string.export_failed)
+            })
         }
     }
     val dirty = note != null && text != null && text != note?.text
@@ -132,7 +137,10 @@ fun NoteScreen(
                                 .putExtra(Intent.EXTRA_STREAM, uri)
                                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             context.startActivity(Intent.createChooser(send, context.getString(R.string.share_note)))
-                        }.onFailure { message = context.getString(R.string.share_failed) }
+                        }.onFailure {
+                            context.app.diagnostics.recordFailure(DiagnosticOperation.NOTE_SHARE, it)
+                            message = context.getString(R.string.share_failed)
+                        }
                     }
                 }) { Text(context.getString(R.string.share)) }
                 if (notebook?.kind == com.feiyu.notes.data.NotebookKind.COURSE) {

@@ -43,7 +43,7 @@ sealed class AiError(message: String, cause: Throwable? = null) : Exception(mess
     class MissingKey : AiError("未设置 DeepSeek API Key")
     class Auth(val code: Int) : AiError("认证失败（HTTP $code），请检查 API Key")
     class Quota(val code: Int) : AiError("额度不足或请求过于频繁（HTTP $code），请稍后重试")
-    class TooLarge(code: Int, detail: String) : AiError("请求超出接口限制（HTTP $code）：$detail")
+    class TooLarge(val code: Int, detail: String) : AiError("请求超出接口限制（HTTP $code）：$detail")
     class Server(val code: Int, detail: String) : AiError("服务返回错误（HTTP $code）：$detail")
     class Network(cause: Throwable) : AiError("网络错误：${cause.message ?: cause.javaClass.simpleName}", cause)
     class EmptyAnswer : AiError("模型没有返回有效回答")

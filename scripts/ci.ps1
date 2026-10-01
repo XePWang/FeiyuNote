@@ -5,6 +5,9 @@
 .EXAMPLE
   pwsh scripts/ci.ps1          # fast: unit tests + debug/test APK builds + artifact
   pwsh scripts/ci.ps1 -Full    # fast + all instrumented/UI tests on the emulator
+
+  A passing -Full run records the tested tree in build/ci/full-passed; the pre-push hook skips
+  pushes whose commits have exactly that tree.
 #>
 param(
     [switch]$Full,
@@ -32,6 +35,23 @@ if (-not (Test-Path -LiteralPath $adb)) { $adb = (Get-Command adb -ErrorAction S
 $emulator = Join-Path $env:ANDROID_HOME 'emulator\emulator.exe'
 $logDir = Join-Path $root 'build\ci'
 New-Item -ItemType Directory -Force $logDir | Out-Null
+
+# A full pass is stamped with the git tree of the files it tested (tracked + untracked, minus ignored),
+# so a run on uncommitted work still counts once exactly that content is committed.
+$passStamp = Join-Path $logDir 'full-passed'
+function Get-WorkTreeId {
+    $index = Join-Path $logDir 'stamp.index'
+    Copy-Item (git rev-parse --path-format=absolute --git-path index) $index -Force
+    $env:GIT_INDEX_FILE = $index
+    try {
+        git add -A 2>$null
+        git write-tree
+    } finally {
+        Remove-Item Env:\GIT_INDEX_FILE
+        Remove-Item $index -Force -ErrorAction SilentlyContinue
+    }
+}
+if ($Full) { $treeAtStart = Get-WorkTreeId }
 
 function Invoke-Step([string]$Name, [scriptblock]$Body) {
     Write-Host "==> $Name" -ForegroundColor Cyan
@@ -92,7 +112,7 @@ if ($Full) {
     Invoke-Step 'UI screenshots' {
         $screenshots = Join-Path $logDir 'screenshots'
         New-Item -ItemType Directory -Force $screenshots | Out-Null
-        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone', 'multi-photo-phone')) {
+        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone', 'multi-photo-phone', 'support-phone')) {
             & $adb -s $Serial pull "/sdcard/Android/data/com.feiyu.notes/files/ui-evidence/$name.png" (Join-Path $screenshots "$name.png")
             if ($LASTEXITCODE -ne 0) { throw "Missing UI screenshot: $name" }
         }
@@ -111,4 +131,9 @@ Invoke-Step 'Artifact' {
     $global:LASTEXITCODE = 0
 }
 
+if ($Full) {
+    # Stamp only if nothing changed while the tests ran.
+    if ((Get-WorkTreeId) -eq $treeAtStart) { Set-Content -LiteralPath $passStamp -Value $treeAtStart -NoNewline }
+    else { Write-Host '    files changed during the run; pass not stamped' -ForegroundColor Yellow }
+}
 Write-Host ("CI passed ({0})" -f $(if ($Full) { 'full' } else { 'fast' })) -ForegroundColor Green

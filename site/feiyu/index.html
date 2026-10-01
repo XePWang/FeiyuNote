@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>肥鱼笔记下载</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1b1b1f; --muted: #5d5e66; --bg: #fbfbff; --card: #ffffff; --line: #d9dae2; --accent: #2d5bd3; --on-accent: #ffffff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e4e2e6; --muted: #a9a9b3; --bg: #121318; --card: #1c1d23; --line: #34353d; --accent: #a8c0ff; --on-accent: #10213f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 1.75rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-top: 20px; }
+  .download { display: block; text-align: center; background: var(--accent); color: var(--on-accent); text-decoration: none; font-weight: 600; font-size: 1.1rem; padding: 14px 20px; border-radius: 999px; }
+  .download:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .link { display: block; overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; font-size: .9rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 12px; user-select: all; }
+  .notes { white-space: pre-wrap; margin: 0; }
+  ol { padding-left: 1.4em; }
+  a { color: var(--accent); }
+  footer { margin-top: 32px; font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>肥鱼笔记 <span lang="en" class="muted">Feiyu Notes</span></h1>
+  <p class="muted">Android 学习笔记应用 · 版本 {{VERSION_NAME}} · 需要 Android {{MIN_ANDROID}} 或更高</p>
+
+  <div class="card">
+    <a class="download" href="{{APK_FILE}}" download aria-label="下载肥鱼笔记 {{VERSION_NAME}} 安装包（APK，{{APK_SIZE}}）">下载 APK（{{APK_SIZE}}）</a>
+    <p class="muted" style="margin:12px 0 0">无法点击时复制下面的链接到浏览器：</p>
+    <span class="link" id="apk-link">{{APK_URL}}</span>
+    <p class="muted" style="margin:8px 0 0;font-size:.85rem;overflow-wrap:anywhere">SHA-256：{{APK_SHA256}}</p>
+  </div>
+
+  <h2>更新说明</h2>
+  <p class="notes">{{NOTES_ZH}}</p>
+
+  <h2>安装步骤</h2>
+  <ol>
+    <li>点击“下载 APK”，等待浏览器下载完成。</li>
+    <li>打开下载的文件。首次安装时系统可能提示“允许此来源安装应用”，按提示允许后返回。</li>
+    <li>在系统确认页点击“安装”。从旧版升级会直接覆盖，笔记、照片和设置都会保留。</li>
+  </ol>
+
+  <section lang="en">
+    <h2>English</h2>
+    <p class="notes">{{NOTES_EN}}</p>
+    <p class="muted">Tap “下载 APK” to download version {{VERSION_NAME}}, open the file and confirm the system installer. Upgrading keeps your notes, photos and settings.</p>
+  </section>
+
+  <footer class="muted">
+    源代码与许可证：<a href="LICENSE.txt">LICENSE</a> · <a href="https://github.com/Yongzhaooo/FeiyuNote/tree/v{{VERSION_NAME}}">v{{VERSION_NAME}} 源代码</a>（GitHub，可选）
+  </footer>
+</main>
+</body>
+</html>

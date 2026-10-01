@@ -13,6 +13,16 @@ import com.feiyu.notes.data.PhotoFiles
 import com.feiyu.notes.settings.ApiSettings
 import com.feiyu.notes.settings.AppPrefs
 import com.feiyu.notes.study.Generator
+import com.feiyu.notes.support.AppInfo
+import com.feiyu.notes.support.DeviceInfo
+import com.feiyu.notes.support.DiagnosticOperation
+import com.feiyu.notes.support.DiagnosticResult
+import com.feiyu.notes.support.Diagnostics
+import com.feiyu.notes.support.FeedbackClient
+import com.feiyu.notes.support.FeedbackDraftStore
+import com.feiyu.notes.support.FeedbackResult
+import com.feiyu.notes.support.UpdateResult
+import com.feiyu.notes.support.UpdateClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,15 +51,26 @@ class FeiyuApp : Application() {
         private set
     lateinit var generator: Generator
         private set
+    lateinit var diagnostics: Diagnostics
+        private set
+    lateinit var feedbackDrafts: FeedbackDraftStore
+        private set
+    /** Network entry points of the help screen; UI tests replace them with fakes. */
+    var submitFeedback: suspend (String) -> FeedbackResult = { FeedbackClient().submit(it) }
+    var checkUpdate: suspend (Long, Int, String) -> UpdateResult = { installed, sdk, language -> UpdateClient().check(installed, sdk, language) }
 
     override fun onCreate() {
         super.onCreate()
         ru.noties.jlatexmath.JLatexMathAndroid.init(this)
         installProduction()
+        Diagnostics.installCrashHandler { if (::diagnostics.isInitialized) diagnostics else null }
+        diagnostics.record(DiagnosticOperation.APP_START, DiagnosticResult.OK)
     }
 
     private fun installProduction() {
         apiSettings = ApiSettings(this)
+        submitFeedback = { FeedbackClient().submit(it) }
+        checkUpdate = { installed, sdk, language -> UpdateClient().check(installed, sdk, language) }
         install(
             filesRoot = filesDir,
             databaseName = NotebookDatabase.NAME,
@@ -85,6 +106,12 @@ class FeiyuApp : Application() {
         loadConfig: suspend (Long) -> AiConfig?,
         generate: suspend (AiConfig, AiInput) -> AiReply,
     ) {
+        diagnostics = Diagnostics(
+            File(filesRoot, "diagnostics"),
+            AppInfo(packageManager.getPackageInfo(packageName, 0).versionName.orEmpty(), UpdateClient.installedVersionCode(this)),
+            DeviceInfo(android.os.Build.MANUFACTURER, android.os.Build.MODEL, android.os.Build.VERSION.SDK_INT),
+        )
+        feedbackDrafts = FeedbackDraftStore(File(filesRoot, "support/feedback-draft.json"))
         avatars = com.feiyu.notes.settings.AvatarFiles(filesRoot)
         welcomeImage = com.feiyu.notes.settings.AvatarFiles(filesRoot, "welcome.png")
         chatImage = com.feiyu.notes.settings.AvatarFiles(filesRoot, "chat.png")
@@ -93,7 +120,7 @@ class FeiyuApp : Application() {
         prefs = AppPrefs(this, prefsName)
         // No request survives the process, so leftover pending replies become interrupted first.
         val recovery: Job = appScope.launch { store.markPendingInterrupted() }
-        generator = Generator(this, store, photos, loadConfig, appScope, ready = recovery, generate = generate, prompt = prefs::prompt)
+        generator = Generator(this, store, photos, loadConfig, appScope, ready = recovery, generate = generate, prompt = prefs::prompt, diagnostics = diagnostics)
     }
 
     companion object {

@@ -30,6 +30,7 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 
 ## 版本更新
 
+- **[0.3.2](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.2)**：设置新增“关于与帮助”，可手动检查更新并打开[独立下载页](https://feiyunote.cangming.fyi/feiyu/)，不需要访问 GitHub。应用内可以反馈问题：可选附带诊断信息，提交前预览，成功后显示反馈编号，失败时保留草稿并可重试，离线时可以分享或复制；反馈页提供 QQ 讨论群 1079399140。本机保存有上限的诊断记录，不含 Key、聊天和笔记，不自动上传；意外退出后，下次启动会提示。模型标签缩短为 `dsf.low` 这类形式，公共聊天改为“整理对话”，长对话只发送最近部分的历史。
 - **[0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1)**：首页新增“一起来聊天吧”公共聊天卡片，无需建课即可随手问，进入后显示专属横幅；欢迎卡片和公共聊天卡片的插图都可在设置中换成自己的图片。默认模型 DeepSeek V4.1 Flash，推理强度提供官方 low/high/max 三档（默认 low），可在设置中改默认值，也可在每个会话单独调整；设置页可测试连接。预装“引导式讲解”模板，新建笔记本默认使用。设置新增“高级”：可修改内置提示词，也可通过 GitHub 链接安装 Skill（只读取 SKILL.md 的文字说明作为讲解模板，不运行任何代码）。问答按会话顺序编号，提问 N 对应回答 N；长会话右侧提供跳转节点。新增语言、日夜和字号设置，修复字体过细。
 - **[0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0)**：一条提问支持多张图片；相册多选、继续拍照追加、逐张预览和移除，导入失败保留其他图片。旧单图笔记自动迁移，多图支持重试与删除清理。使用系统照片选择器，无需整个相册的读取权限。
 - **[0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)**：对话、笔记与导出支持离线 LaTeX；新增编辑/预览及源码复制，完善 API Key 加密与凭据保护。
@@ -58,7 +59,7 @@ pwsh -NoProfile -File scripts/ci.ps1 -Full
 
 Windows 首次配置或 SDK 缺失时运行 `pwsh -File scripts/setup-sdk.ps1`；需要完整 CI 时加 `-WithEmulator`，创建或复用 `Feiyu_CI_API36`。SDK 默认位于 `%LOCALAPPDATA%\Android\Sdk`；CI 默认使用 `emulator-5556`，只接受模拟器目标。
 
-本地完整 CI 使用隔离数据和模拟回答，不调用计费接口；截图位于 `build/ci/screenshots/`。可通过 `git config core.hooksPath .githooks` 启用 Git 钩子。
+本地完整 CI 使用隔离数据和模拟回答，不调用计费接口；截图位于 `build/ci/screenshots/`。可通过 `git config core.hooksPath .githooks` 启用 Git 钩子：提交前运行快速 CI，推送前运行完整 CI；如果推送内容与上次完整 CI 通过的版本相比只改了 Markdown，则跳过。推送到 main 后，远端只检查能否构建；PR 和发布 tag 仍会运行单测。
 
 GitHub Actions 对指向 main 的 PR 及 main 推送运行单测和 debug 构建，使用只读权限。推送 `v*` 标签且构建通过后，独立任务使用仓库 Secrets 签名并发布预览版。详见[构建流程](.github/workflows/android.yml)。本地签名 release 构建需配置 `FEIYU_KEYSTORE` 与 `FEIYU_KEY_PASSWORD`（别名 `feiyu`），勿提交密钥。
 

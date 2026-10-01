@@ -30,7 +30,13 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v4
+      # Pushes to main already passed the maintainer's local full CI (pre-push hook), so they only
+      # check that a clean checkout compiles. Pull requests and release tags also run the unit tests.
+      - name: Debug build (main push)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: bash ./gradlew assembleDebug --console=plain
       - name: Unit tests and debug build
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
         run: bash ./gradlew testDebugUnitTest assembleDebug --console=plain
       - uses: actions/upload-artifact@v4
         with:

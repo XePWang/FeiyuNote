@@ -1,0 +1,8 @@
+[Unit]
+Description=Delete Feiyu Notes feedback older than 30 days
+
+[Service]
+Type=oneshot
+User=feiyu-feedback
+Group=feiyu-feedback
+ExecStart=/usr/bin/python3 /opt/feiyu-feedback/server.py purge --db /var/lib/feiyu-feedback/feedback.db

@@ -81,6 +81,25 @@ class ContextBuilderTest {
         assertFalse(m.systemText.contains("附加讲解要求"))
     }
 
+    @Test fun longHistoryKeepsNewestMessagesWithinBudget() {
+        val chat = buildList {
+            var parent: Long? = null
+            for (i in 0 until 40) {
+                add(user(2L * i + 1, "问$i" + "x".repeat(2_000), parent = parent))
+                add(answer(2L * i + 2, 2L * i + 1, "答$i" + "y".repeat(2_000)))
+                parent = 2L * i + 2
+            }
+        }
+        val target = Entry(100, 1, EntryKind.USER, EntryAction.ASK, "最新", parentEntryId = 80)
+        val messages = ContextBuilder.buildTurn(target, chat, null, null, resolve).messages
+        val history = messages.dropLast(1)
+        assertTrue(history.sumOf { it.text.length } <= ContextBuilder.HISTORY_CHAR_BUDGET)
+        assertEquals(AiRole.USER, history.first().role)
+        assertTrue(history.last().text.startsWith("答39"))
+        assertEquals("最新", messages.last().text)
+        assertFalse(history.any { it.text.startsWith("问0") })
+    }
+
     @Test fun incompleteAnswersNeverEnterContext() {
         val failed = listOf(user(1, "q"), answer(2, 1, "网络错误", EntryState.FAILED), answer(3, 1, "ok"))
         val target = user(4, "再问", parent = 3)
