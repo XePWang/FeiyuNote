@@ -227,6 +227,27 @@ class StudyViewModel(
 
     fun cancel() = generator.cancel()
 
+    fun addToReview(sourceEntryId: Long?, topic: String, notes: String) = viewModelScope.launch {
+        if (sourceEntryId != null) {
+            val existing = store.findReviewRecordBySource(notebookId, sourceEntryId)
+            if (existing != null) {
+                _notice.value = context.getString(R.string.already_in_review)
+                return@launch
+            }
+        }
+        val record = store.insertReviewRecord(
+            notebookId = notebookId,
+            topic = topic,
+            notes = notes,
+            sourceEntryId = sourceEntryId,
+        )
+        if (record != null) {
+            _notice.value = context.getString(R.string.added_to_review)
+        } else {
+            _notice.value = context.getString(R.string.already_in_review)
+        }
+    }
+
     // ---- threads ----
 
     fun setMastery(rootId: Long, mastery: Mastery) = viewModelScope.launch { store.setMastery(rootId, mastery) }

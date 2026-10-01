@@ -1,7 +1,7 @@
 # FeiyuNote 开发基线核验报告 (docs/BASELINE.md)
 
 **记录时间**：2026-10-02 (Local)
-**基线状态**：单元测试通过 (26/26)，Debug APK 构建成功 (exit code 0)。
+**基线状态**：针对性 JVM 单元测试通过 (26/26)，Debug APK 构建成功 (exit code 0)。
 
 ---
 
@@ -24,10 +24,8 @@
 
 - **目标仓库**：`git@github.com:XePWang/FeiyuNote.git` (Fork 自 `Yongzhaooo/FeiyuNote`)
 - **远端 URL (origin)**：`git@github.com:XePWang/FeiyuNote.git` (SSH 转发认证：`XePWang`)
-- **当前分支**：`main`
-- **基线 HEAD 提交**：`bc33554b294a37ff62df5ba04d911d8d68157224`
-- **提交说明**：`test: wait for the prompt dialog to close before navigating back`
-- **相对规划基线差异**：与规划时检查的基线提交完全一致（无漂移）。
+- **构建基线提交**：`main` 分支 `bc33554b294a37ff62df5ba04d911d8d68157224` (`test: wait for the prompt dialog to close before navigating back`，与规划时快照一致，无远端漂移)
+- **基线交付分支**：`docs/baseline-reproduce`（本地提交 `3c18eee7b7437d96de1ed48004f5bef01d0390d4`，包含规范与基线文档安装）
 
 ---
 
@@ -39,11 +37,11 @@
   ```
 - **退出状态码**：`0` (BUILD SUCCESSFUL in 4m 28s)
 - **Actionable Tasks**：42 executed
-- **单元测试结果**：共 26 项单元测试全部通过（0 failures, 0 skipped）
+- **单元测试结果**：共 26 项 JVM 单元测试全部通过（0 failures, 0 skipped）
   - `com.feiyu.notes.ai.DeepSeekClientTest` (6 tests)
-  - `com.feiyu.notes.export.NoteExporterTest` (3 tests)
+  - `com.feiyu.notes.export.NoteExporterTest` (4 tests)
   - `com.feiyu.notes.math.MathTextTest` (3 tests)
-  - `com.feiyu.notes.settings.SkillImportTest` (4 tests)
+  - `com.feiyu.notes.settings.SkillImportTest` (3 tests)
   - `com.feiyu.notes.study.ContextBuilderTest` (7 tests)
   - `com.feiyu.notes.ui.ThreadNavigationTest` (3 tests)
 - **构建输出 APK**：
@@ -59,8 +57,8 @@
 
 | 功能模块 | 核心代码路径 | 状态与说明 |
 |---|---|---|
-| **课程 / 课次 (Notebook / Lesson)** | `data/Models.kt`, `data/NotebookStore.kt`, `ui/HomeScreen.kt`, `ui/ChatScreen.kt` | 源码具备；SQLite v3 存储结构完备，支持 Notebook、Lesson 级联管理与预装引导模板。 |
-| **多图输入 (Multi-image)** | `data/Models.kt` (`imagePaths`, `attachedImageEntryIds`), `study/StudyViewModel.kt`, `ui/ChatScreen.kt` | 源码具备；单元测试覆盖多图输入组装 (`ContextBuilderTest`)，UI 流程测试见 `androidTest/UiFlowTest.kt`。 |
+| **课程 / 课次 (Notebook / Lesson)** | `data/Models.kt`, `data/NotebookStore.kt`, `ui/NotebookListScreen.kt`, `ui/LessonListScreen.kt`, `ui/AppNavigation.kt` | 源码具备；SQLite v3 存储结构支持 Notebook、Lesson 级联管理与预装引导模板。 |
+| **多图输入 (Multi-image)** | `data/Models.kt` (`imagePaths`, `attachedImageEntryIds`), `study/StudyViewModel.kt`, `ui/ChatScreen.kt` | 源码具备；单元测试覆盖多图输入组装 (`ContextBuilderTest`)，UI 流程测试定义在 `androidTest/UiFlowTest.kt`（本轮未在真机执行）。 |
 | **ASK / EXPAND / MISTAKE** | `data/Models.kt` (`EntryAction`), `study/ContextBuilder.kt`, `study/Generator.kt` | 源码具备；`ContextBuilder.buildTurn` 根据动作组装请求，单测覆盖纯图/附图/展开/错题 prompt 组装。 |
 | **手动整理 QA (Summary)** | `study/ContextBuilder.kt` (`buildSummary`), `study/Generator.kt` (`summarize`), `study/StudyViewModel.kt` | 源码具备；基于完成状态问答提取 `#ID 问` / `#ID 答` 纯文本并发起单次模型总结，支持自定义 base prompt 与模板覆盖。 |
 | **parentEntryId 分支追问** | `data/Models.kt`, `data/NotebookStore.kt`, `study/ContextBuilder.kt` (`ancestors`), `ui/ThreadNavigation.kt` | 源码具备；单测覆盖祖先链追溯 (`ContextBuilderTest`)、分支切换与同层导航 (`ThreadNavigationTest`)。 |
@@ -79,6 +77,7 @@
 
 ## 6. 尚未验证项目与边界说明
 
-1. **真实设备 / 模拟器 UI 交互**：本轮在无 GUI 的 Linux 容器内执行了全部 headless JVM 单元测试与 APK 打包；折叠屏铰链避让、屏幕旋转、真机手势及真实 UI 渲染未在真机上验收。
+1. **真实设备 / 模拟器 UI 交互**：本轮在无 GUI 的 Linux 容器内执行了针对性的 JVM 单元测试与 APK 打包；折叠屏铰链避让、屏幕旋转、真机手势及真实 UI 渲染未在真机/模拟器上验收，不能据此声称 UI 测试完备。
 2. **真实模型 API 调用**：`DeepSeekClientTest` 使用 Mock 验证协议与重试机制；未配置生产 API Key，未消耗付费模型额度。
-3. **Windows 专用脚本 (`scripts/ci.ps1`)**：仓库既有 `.githooks` 调用 PowerShell 脚本 `scripts/ci.ps1`，依赖 Windows 本地路径与工具；Linux 容器内通过 Gradle Wrapper 执行构建，未直接运行该 PowerShell 脚本。
+3. **真实 SQLite 迁移与持久化**：已编写迁移逻辑，但 instrumented 测试（`NotebookStoreTest`）需 Android 运行时环境，未在设备上实测。
+4. **Windows 专用脚本 (`scripts/ci.ps1`)**：仓库既有 `.githooks` 调用 PowerShell 脚本 `scripts/ci.ps1`，依赖 Windows 本地路径与工具；Linux 容器内通过 Gradle Wrapper 执行构建，未直接运行该 PowerShell 脚本。

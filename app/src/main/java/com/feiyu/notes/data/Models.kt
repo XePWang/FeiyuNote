@@ -67,3 +67,26 @@ data class Template(
 
     companion object { const val BUILTIN_GUIDED = "builtin:guided" }
 }
+
+enum class ReviewStatus(val db: String) {
+    PENDING("pending"),
+    UNDERSTOOD("understood"),
+    CONFUSED("confused");
+
+    companion object {
+        fun fromDb(value: String): ReviewStatus =
+            entries.firstOrNull { it.db == value } ?: PENDING
+    }
+}
+
+data class ReviewRecord(
+    val id: Long,
+    val notebookId: Long,
+    val topic: String,
+    val notes: String,
+    val sourceEntryId: Long? = null,
+    val sourceDeleted: Boolean = false,
+    val status: ReviewStatus = ReviewStatus.PENDING,
+    val createdAt: Long = 0,
+    val updatedAt: Long = 0,
+)

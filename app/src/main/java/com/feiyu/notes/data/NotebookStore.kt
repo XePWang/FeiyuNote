@@ -112,6 +112,14 @@ class NotebookStore(
         val notebookId = getLesson(id)?.notebookId ?: return false
         var images = emptyList<String>()
         val deleted = write {
+            val now = System.currentTimeMillis()
+            db.execSQL(
+                """
+                UPDATE review_records SET source_deleted = 1, updated_at = ?
+                WHERE source_entry_id IN (SELECT id FROM entries WHERE lesson_id = ?)
+                """,
+                arrayOf<Any>(now, id)
+            )
             images = query("SELECT image_paths FROM entries WHERE lesson_id = ?", id) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
             db.delete("lessons", "id = ?", args(id)) == 1
         }
@@ -263,6 +271,15 @@ class NotebookStore(
                 """,
                 rootId,
             ) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
+            val now = System.currentTimeMillis()
+            db.execSQL(
+                """
+                WITH RECURSIVE t(id) AS (SELECT ? UNION ALL SELECT e.id FROM entries e JOIN t ON e.parent_entry_id = t.id)
+                UPDATE review_records SET source_deleted = 1, updated_at = ?
+                WHERE source_entry_id IN (SELECT id FROM t)
+                """,
+                arrayOf<Any>(rootId, now)
+            )
             db.delete("entries", "id = ?", args(rootId)) == 1
         }
         if (deleted) withContext(io) { photos.deletePhotos(notebookId, images) }
@@ -306,6 +323,158 @@ class NotebookStore(
     /** Notebooks using it as default fall back to none (FK ON DELETE SET NULL). */
     suspend fun deleteTemplate(id: Long): Boolean = write {
         db.delete("templates", "id = ?", args(id)) == 1
+    }
+
+    // ---- review records (spec §12 / course review) ----
+
+    suspend fun listReviewRecords(notebookId: Long): List<ReviewRecord> = read {
+        query("SELECT * FROM review_records WHERE notebook_id = ? ORDER BY created_at DESC, id DESC", notebookId) {
+            it.toReviewRecord()
+        }
+    }
+
+    suspend fun getReviewRecord(notebookId: Long, recordId: Long): ReviewRecord? = read {
+        query("SELECT * FROM review_records WHERE id = ? AND notebook_id = ?", recordId, notebookId) {
+            it.toReviewRecord()
+        }.firstOrNull()
+    }
+
+    suspend fun findReviewRecordBySource(notebookId: Long, sourceEntryId: Long): ReviewRecord? = read {
+        query(
+            "SELECT * FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0 LIMIT 1",
+            notebookId, sourceEntryId
+        ) { it.toReviewRecord() }.firstOrNull()
+    }
+
+    suspend fun insertReviewRecord(record: ReviewRecord): Long? = write {
+        // 1. Strict notebook boundary: must be an existing COURSE notebook
+        val kind = query("SELECT kind FROM notebooks WHERE id = ?", record.notebookId) {
+            enumOf<NotebookKind>(it.getString(0))
+        }.firstOrNull()
+        if (kind != NotebookKind.COURSE) return@write null
+
+        // 2. Source entry validation: if provided, must exist and belong to the same notebook
+        if (record.sourceEntryId != null) {
+            val sourceNotebookId = query(
+                """
+                SELECT l.notebook_id FROM entries e JOIN lessons l ON e.lesson_id = l.id
+                WHERE e.id = ?
+                """,
+                record.sourceEntryId
+            ) { it.getLong(0) }.firstOrNull()
+            if (sourceNotebookId != record.notebookId) return@write null
+
+            // 3. Prevent duplicate insertion for the same active source entry in this notebook
+            val existingId = query(
+                "SELECT id FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0",
+                record.notebookId, record.sourceEntryId
+            ) { it.getLong(0) }.firstOrNull()
+            if (existingId != null) return@write existingId
+        }
+
+        val now = clock()
+        val values = ContentValues().apply {
+            put("notebook_id", record.notebookId)
+            put("topic", record.topic.trim())
+            put("notes", record.notes.trim())
+            put("source_entry_id", record.sourceEntryId)
+            put("source_deleted", if (record.sourceDeleted) 1 else 0)
+            put("status", record.status.db)
+            put("created_at", if (record.createdAt > 0) record.createdAt else now)
+            put("updated_at", if (record.updatedAt > 0) record.updatedAt else now)
+        }
+        db.insert("review_records", null, values)
+    }
+
+    suspend fun updateReviewRecord(
+        notebookId: Long,
+        recordId: Long,
+        topic: String,
+        notes: String,
+        status: ReviewStatus? = null,
+    ): Boolean = write {
+        val now = clock()
+        val values = ContentValues().apply {
+            put("topic", topic.trim())
+            put("notes", notes.trim())
+            if (status != null) put("status", status.db)
+            put("updated_at", now)
+        }
+        db.update("review_records", values, "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
+    }
+
+    suspend fun setReviewStatus(
+        notebookId: Long,
+        recordId: Long,
+        status: ReviewStatus,
+    ): Boolean = write {
+        val now = clock()
+        val values = ContentValues().apply {
+            put("status", status.db)
+            put("updated_at", now)
+        }
+        db.update("review_records", values, "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
+    }
+
+    suspend fun deleteReviewRecord(notebookId: Long, recordId: Long): Boolean = write {
+        db.delete("review_records", "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
+    }
+
+    suspend fun getReviewRecord(recordId: Long): ReviewRecord? = read {
+        query("SELECT * FROM review_records WHERE id = ?", recordId) {
+            it.toReviewRecord()
+        }.firstOrNull()
+    }
+
+    suspend fun insertReviewRecord(
+        notebookId: Long,
+        topic: String,
+        notes: String,
+        sourceEntryId: Long? = null,
+        status: ReviewStatus = ReviewStatus.PENDING,
+    ): ReviewRecord? {
+        val record = ReviewRecord(
+            id = 0,
+            notebookId = notebookId,
+            topic = topic,
+            notes = notes,
+            sourceEntryId = sourceEntryId,
+            status = status,
+        )
+        val id = insertReviewRecord(record) ?: return null
+        return getReviewRecord(notebookId, id)
+    }
+
+    suspend fun updateReviewRecord(
+        recordId: Long,
+        topic: String,
+        notes: String,
+        status: ReviewStatus? = null,
+    ): Boolean = write {
+        val now = clock()
+        val values = ContentValues().apply {
+            put("topic", topic.trim())
+            put("notes", notes.trim())
+            if (status != null) put("status", status.db)
+            put("updated_at", now)
+        }
+        db.update("review_records", values, "id = ?", args(recordId)) == 1
+    }
+
+    suspend fun setReviewStatus(
+        recordId: Long,
+        status: ReviewStatus,
+    ): Boolean = write {
+        val now = clock()
+        val values = ContentValues().apply {
+            put("status", status.db)
+            put("updated_at", now)
+        }
+        db.update("review_records", values, "id = ?", args(recordId)) == 1
+    }
+
+    suspend fun deleteReviewRecord(recordId: Long): Boolean = write {
+        db.delete("review_records", "id = ?", args(recordId)) == 1
     }
 
     // ---- helpers ----
@@ -406,6 +575,18 @@ class NotebookStore(
         archived = long("archived") == 1L,
         mastery = enumOf<Mastery>(str("mastery")),
         createdAt = long("created_at")!!,
+    )
+
+    private fun Cursor.toReviewRecord() = ReviewRecord(
+        id = long("id")!!,
+        notebookId = long("notebook_id")!!,
+        topic = str("topic")!!,
+        notes = str("notes")!!,
+        sourceEntryId = long("source_entry_id"),
+        sourceDeleted = long("source_deleted") == 1L,
+        status = ReviewStatus.fromDb(str("status") ?: "pending"),
+        createdAt = long("created_at")!!,
+        updatedAt = long("updated_at")!!,
     )
 }
 

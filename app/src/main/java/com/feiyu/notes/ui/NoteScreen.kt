@@ -67,6 +67,7 @@ fun NoteScreen(
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable(noteId) { mutableStateOf(false) }
+    var addingToReview by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(note?.id) { if (text == null) note?.let { text = it.text } }
 
     val notebookName = if (notebook?.id == com.feiyu.notes.data.NotebookStore.GENERAL_ID) context.getString(R.string.general_chat) else notebook?.name.orEmpty()
@@ -134,6 +135,11 @@ fun NoteScreen(
                         }.onFailure { message = context.getString(R.string.share_failed) }
                     }
                 }) { Text(context.getString(R.string.share)) }
+                if (notebook?.kind == com.feiyu.notes.data.NotebookKind.COURSE) {
+                    OutlinedButton(onClick = { addingToReview = true }) {
+                        Text(context.getString(R.string.add_to_review))
+                    }
+                }
                 OutlinedButton(onClick = { confirmDelete = true }) { Text(context.getString(R.string.delete_note)) }
             }
             if (dirty) Text(context.getString(R.string.unsaved_note), style = MaterialTheme.typography.bodySmall)
@@ -158,4 +164,35 @@ fun NoteScreen(
         onConfirm = { scope.launch { if (store.deleteNote(noteId)) onBack() } },
         onDismiss = { confirmDelete = false },
     )
+    val activeNote = note
+    if (addingToReview && activeNote != null) {
+        val defaultTopic = activeNote.text.lineSequence().firstOrNull()?.take(40)?.ifBlank {
+            context.getString(R.string.note_number, noteId)
+        } ?: context.getString(R.string.note_number, noteId)
+        val defaultNotes = activeNote.text.take(120)
+
+        ReviewRecordEditDialog(
+            title = context.getString(R.string.add_to_review),
+            initialTopic = defaultTopic,
+            initialNotes = defaultNotes,
+            sourceEntryId = noteId,
+            onConfirm = { topic, notes ->
+                scope.launch {
+                    val existing = store.findReviewRecordBySource(notebookId, noteId)
+                    if (existing != null) {
+                        message = context.getString(R.string.already_in_review)
+                    } else {
+                        val record = store.insertReviewRecord(
+                            notebookId = notebookId,
+                            topic = topic,
+                            notes = notes,
+                            sourceEntryId = noteId,
+                        )
+                        message = if (record != null) context.getString(R.string.added_to_review) else context.getString(R.string.already_in_review)
+                    }
+                }
+            },
+            onDismiss = { addingToReview = false },
+        )
+    }
 }

@@ -92,6 +92,7 @@ fun ChatScreen(
     val notice by vm.notice.collectAsStateWithLifecycle()
     var summarizing by rememberSaveable { mutableStateOf(false) }
     var retryTemplateFor by rememberSaveable { mutableStateOf<Long?>(null) }
+    var reviewingEntry by remember { mutableStateOf<Entry?>(null) }
     val d = data
 
     Scaffold(
@@ -160,6 +161,7 @@ fun ChatScreen(
                                     if (user.templateId != null && d.templates.none { it.id == user.templateId }) retryTemplateFor = user.id
                                     else vm.retry(user.id)
                                 },
+                                onAddToReview = if (!practice) { { reviewingEntry = it } } else null,
                             )
                         }
                     }
@@ -194,6 +196,24 @@ fun ChatScreen(
             confirmLabel = context.getString(R.string.retry),
             onConfirm = { vm.retry(userId, replaceTemplate = true, templateId = it) },
             onDismiss = { retryTemplateFor = null },
+        )
+    }
+    reviewingEntry?.let { entry ->
+        val userQuestion = d?.entries?.firstOrNull { it.id == entry.parentEntryId }
+        val defaultTopic = userQuestion?.text?.lineSequence()?.firstOrNull()?.take(40)?.ifBlank {
+            context.getString(R.string.reply_number, entry.id)
+        } ?: context.getString(R.string.reply_number, entry.id)
+        val defaultNotes = entry.text.lineSequence().firstOrNull().orEmpty().take(80)
+
+        ReviewRecordEditDialog(
+            title = context.getString(R.string.add_to_review),
+            initialTopic = defaultTopic,
+            initialNotes = defaultNotes,
+            sourceEntryId = entry.id,
+            onConfirm = { topic, notes ->
+                vm.addToReview(entry.id, topic, notes)
+            },
+            onDismiss = { reviewingEntry = null },
         )
     }
 }
@@ -265,6 +285,7 @@ fun EntryCard(
     vm: StudyViewModel,
     readOnly: Boolean,
     onRetry: (Entry) -> Unit,
+    onAddToReview: ((Entry) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -307,7 +328,7 @@ fun EntryCard(
                 }
             }
             if (isUser) UserMeta(entry, all, templates)
-            if (entry.kind == EntryKind.ASSISTANT && !readOnly) AssistantActions(entry, all, practice, vm, onRetry)
+            if (entry.kind == EntryKind.ASSISTANT && !readOnly) AssistantActions(entry, all, practice, vm, onRetry, onAddToReview)
         }
     }
     if (confirmDelete) ConfirmDialog(
@@ -347,7 +368,14 @@ private fun UserMeta(entry: Entry, all: List<Entry>, templates: List<Template>) 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AssistantActions(entry: Entry, all: List<Entry>, practice: Boolean, vm: StudyViewModel, onRetry: (Entry) -> Unit) {
+private fun AssistantActions(
+    entry: Entry,
+    all: List<Entry>,
+    practice: Boolean,
+    vm: StudyViewModel,
+    onRetry: (Entry) -> Unit,
+    onAddToReview: ((Entry) -> Unit)? = null,
+) {
     val context = LocalContext.current
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         when (entry.state) {
@@ -355,6 +383,9 @@ private fun AssistantActions(entry: Entry, all: List<Entry>, practice: Boolean, 
                 OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.ASK) }) { Text(context.getString(R.string.follow_up)) }
                 OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.EXPAND) }) { Text(context.getString(R.string.expand)) }
                 if (practice) OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.MISTAKE) }) { Text(context.getString(R.string.mistake)) }
+                if (!practice && onAddToReview != null) {
+                    OutlinedButton(onClick = { onAddToReview(entry) }) { Text(context.getString(R.string.add_to_review)) }
+                }
             }
             EntryState.FAILED, EntryState.CANCELLED, EntryState.INTERRUPTED -> {
                 val user = all.firstOrNull { it.id == entry.parentEntryId }

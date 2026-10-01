@@ -264,4 +264,155 @@ class NotebookStoreTest {
         assertTrue(runCatching { photos.resolvePhoto(n!!.id, "a/b.jpg") }.isFailure)
         assertFalse(photos.isUsable(n!!.id, "..\\x.jpg"))
     }
+
+    @Test fun reviewRecordsIsolatedByCourseNotebook() = runBlocking {
+        val courseA = store.createNotebook(NotebookKind.COURSE, "Course A")!!
+        val courseB = store.createNotebook(NotebookKind.COURSE, "Course B")!!
+        val recordA = store.insertReviewRecord(courseA.id, "Topic A", "Notes A")!!
+        val recordB = store.insertReviewRecord(courseB.id, "Topic B", "Notes B")!!
+
+        val listA = store.listReviewRecords(courseA.id)
+        val listB = store.listReviewRecords(courseB.id)
+
+        assertEquals(1, listA.size)
+        assertEquals(recordA.id, listA[0].id)
+        assertEquals(1, listB.size)
+        assertEquals(recordB.id, listB[0].id)
+    }
+
+    @Test fun reviewRecordRejectsCrossCourseSourceEntry() = runBlocking {
+        val courseA = store.createNotebook(NotebookKind.COURSE, "Course A")!!
+        val courseB = store.createNotebook(NotebookKind.COURSE, "Course B")!!
+        val lessonB = store.createLesson(courseB.id, "Lesson B")!!
+        val (qB, _) = ask(lessonB.id, "Question in B")
+
+        val result = store.insertReviewRecord(courseA.id, "Topic", "Notes", sourceEntryId = qB.id)
+        assertNull(result)
+        assertTrue(store.listReviewRecords(courseA.id).isEmpty())
+    }
+
+    @Test fun reviewRecordRejectsNonCourseNotebook() = runBlocking {
+        val practice = store.createNotebook(NotebookKind.PRACTICE, "Practice")!!
+        val resultPractice = store.insertReviewRecord(practice.id, "Topic", "Notes")
+        assertNull(resultPractice)
+
+        val resultGeneral = store.insertReviewRecord(NotebookStore.GENERAL_ID, "Topic", "Notes")
+        assertNull(resultGeneral)
+    }
+
+    @Test fun reviewRecordCrudAndReopen() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Math")!!
+        val lesson = store.createLesson(course.id, "Calculus")!!
+        val (q, _) = ask(lesson.id, "Limit definition")
+
+        val record = store.insertReviewRecord(course.id, "Limits", "Review eps-delta", sourceEntryId = q.id)!!
+        assertEquals(ReviewStatus.PENDING, record.status)
+        assertFalse(record.sourceDeleted)
+        assertEquals(q.id, record.sourceEntryId)
+
+        reopen()
+
+        val fetched = store.getReviewRecord(record.id)!!
+        assertEquals(record.id, fetched.id)
+        assertEquals(course.id, fetched.notebookId)
+        assertEquals("Limits", fetched.topic)
+        assertEquals("Review eps-delta", fetched.notes)
+        assertEquals(ReviewStatus.PENDING, fetched.status)
+        assertFalse(fetched.sourceDeleted)
+
+        assertTrue(store.updateReviewRecord(record.id, "Limits updated", "Updated notes"))
+        val updated = store.getReviewRecord(record.id)!!
+        assertEquals("Limits updated", updated.topic)
+        assertEquals("Updated notes", updated.notes)
+        assertTrue(updated.updatedAt >= updated.createdAt)
+
+        assertTrue(store.setReviewStatus(record.id, ReviewStatus.UNDERSTOOD))
+        val understood = store.getReviewRecord(record.id)!!
+        assertEquals(ReviewStatus.UNDERSTOOD, understood.status)
+
+        assertTrue(store.setReviewStatus(record.id, ReviewStatus.CONFUSED))
+        val confused = store.getReviewRecord(record.id)!!
+        assertEquals(ReviewStatus.CONFUSED, confused.status)
+
+        reopen()
+        assertEquals(ReviewStatus.CONFUSED, store.getReviewRecord(record.id)!!.status)
+
+        assertTrue(store.deleteReviewRecord(record.id))
+        assertNull(store.getReviewRecord(record.id))
+        assertTrue(store.listReviewRecords(course.id).isEmpty())
+    }
+
+    @Test fun reviewRecordDuplicateSourcePrevention() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Math")!!
+        val lesson = store.createLesson(course.id, "Calculus")!!
+        val (q, _) = ask(lesson.id, "Derivative rules")
+
+        val first = store.insertReviewRecord(course.id, "Derivatives", "Product rule", sourceEntryId = q.id)!!
+        val second = store.insertReviewRecord(course.id, "Derivatives 2", "Another note", sourceEntryId = q.id)!!
+
+        assertEquals(first.id, second.id)
+        assertEquals(1, store.listReviewRecords(course.id).size)
+
+        val bySource = store.findReviewRecordBySource(course.id, q.id)
+        assertNotNull(bySource)
+        assertEquals(first.id, bySource!!.id)
+    }
+
+    @Test fun reviewRecordsCascadeOnNotebookDeletion() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Math")!!
+        val record = store.insertReviewRecord(course.id, "Limits", "Notes")!!
+        assertNotNull(store.getReviewRecord(record.id))
+
+        assertTrue(store.deleteNotebook(course.id))
+        assertNull(store.getReviewRecord(record.id))
+        assertTrue(store.listReviewRecords(course.id).isEmpty())
+    }
+
+    @Test fun sourceDeletedMarkedOnLessonOrThreadDeletion() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Physics")!!
+        val lesson1 = store.createLesson(course.id, "Mechanics")!!
+        val lesson2 = store.createLesson(course.id, "Optics")!!
+        val (q1, a1) = ask(lesson1.id, "Newton's laws")
+        val (q2, a2) = ask(lesson2.id, "Refraction")
+
+        val record1 = store.insertReviewRecord(course.id, "Newton", "Law 1", sourceEntryId = a1.id)!!
+        val record2 = store.insertReviewRecord(course.id, "Optics", "Snell's Law", sourceEntryId = a2.id)!!
+
+        assertFalse(store.getReviewRecord(record1.id)!!.sourceDeleted)
+        assertFalse(store.getReviewRecord(record2.id)!!.sourceDeleted)
+
+        assertTrue(store.deleteThread(q1.id))
+        val rec1AfterThreadDel = store.getReviewRecord(record1.id)!!
+        assertTrue(rec1AfterThreadDel.sourceDeleted)
+        assertEquals(a1.id, rec1AfterThreadDel.sourceEntryId)
+        assertFalse(store.getReviewRecord(record2.id)!!.sourceDeleted)
+
+        assertTrue(store.deleteLesson(lesson2.id))
+        val rec2AfterLessonDel = store.getReviewRecord(record2.id)!!
+        assertTrue(rec2AfterLessonDel.sourceDeleted)
+        assertEquals(a2.id, rec2AfterLessonDel.sourceEntryId)
+    }
+
+    @Test fun v3ToV4MigrationPreservesDataAndAllowsReviewRecords() = runBlocking {
+        database.close()
+        val legacy = context.openOrCreateDatabase(dbName, 0, null)
+        val schema = InstrumentationRegistry.getInstrumentation().context.assets.open("notes-v1.sql").bufferedReader().use { it.readText() }
+        schema.split(';').filter { it.isNotBlank() }.forEach { legacy.execSQL(it) }
+        legacy.execSQL("INSERT INTO notebooks (id,kind,name,created_at) VALUES (1,'course','Existing Course',1)")
+        legacy.execSQL("INSERT INTO lessons (id,notebook_id,title,created_at) VALUES (2,1,'Existing Lesson',1)")
+        legacy.execSQL("INSERT INTO entries (id,lesson_id,kind,action,text,image_path,created_at) VALUES (3,2,'user','ask','Existing Q',NULL,1)")
+        legacy.version = 1
+        legacy.close()
+
+        open()
+        assertEquals(NotebookDatabase.VERSION, database.readableDatabase.version)
+
+        val existingEntries = store.readEntries(2)
+        assertEquals(1, existingEntries.size)
+        assertEquals("Existing Q", existingEntries[0].text)
+
+        val rec = store.insertReviewRecord(1, "Migrated Review", "Works after migration", sourceEntryId = 3)
+        assertNotNull(rec)
+        assertEquals(1, store.listReviewRecords(1).size)
+    }
 }
