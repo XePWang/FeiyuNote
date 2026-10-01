@@ -22,7 +22,7 @@ object ContextBuilder {
         lessonEntries: List<Entry>,
         referenceNote: Entry?,
         template: Template?,
-        resolvePhoto: (Entry) -> File,
+        resolvePhoto: (String) -> File,
     ): AiInput {
         require(target.kind == EntryKind.USER && target.action != null)
         val chain = ancestors(target, lessonEntries)
@@ -38,10 +38,10 @@ object ContextBuilder {
 
         // Own photo first, then user-selected photos from this chain only.
         val images = buildList {
-            target.imagePath?.let { add(resolvePhoto(target)) }
+            addAll(target.imagePaths.map(resolvePhoto))
             target.attachedImageEntryIds.mapNotNull(onChain::get)
-                .filter { it.kind == EntryKind.USER && it.imagePath != null }
-                .forEach { add(resolvePhoto(it)) }
+                .filter { it.kind == EntryKind.USER }
+                .forEach { addAll(it.imagePaths.map(resolvePhoto)) }
         }
 
         val text = when (target.action) {

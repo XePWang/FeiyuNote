@@ -131,6 +131,7 @@ class DeepSeekClient(
 
         val defaultHttp: OkHttpClient by lazy {
             OkHttpClient.Builder()
+                .retryOnConnectionFailure(false)
                 .connectTimeout(20, TimeUnit.SECONDS)
                 .readTimeout(180, TimeUnit.SECONDS)
                 .writeTimeout(120, TimeUnit.SECONDS)

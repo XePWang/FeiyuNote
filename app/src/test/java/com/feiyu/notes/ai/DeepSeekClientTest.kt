@@ -78,12 +78,14 @@ class DeepSeekClientTest {
 
     @Test fun errorsAreDistinguishable() = runBlocking {
         suspend fun expect(response: MockResponse, type: Class<out AiError>) {
+            val before = server.requestCount
             server.enqueue(response)
             try {
                 client().generate(input); fail("expected $type")
             } catch (e: AiError) {
                 assertTrue("got ${e.javaClass}", type.isInstance(e))
             }
+            assertEquals("failed requests are not silently resent", before + 1, server.requestCount)
         }
         expect(ok(""), AiError.EmptyAnswer::class.java)
         expect(ok(null), AiError.EmptyAnswer::class.java)

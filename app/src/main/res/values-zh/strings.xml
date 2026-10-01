@@ -182,4 +182,8 @@
     <string name="edit_note">编辑</string>
     <string name="preview_note">预览</string>
     <string name="scroll_formula">横向滑动查看完整公式</string>
+    <string name="photo_count">%1$d 张图片</string>
+    <string name="remove_photo_number">移除第 %1$d 张</string>
+    <string name="importing_photos">正在导入图片…</string>
+    <string name="image_import_failed_count">%1$d 张图片导入失败，其余已选图片已保留</string>
 </resources>

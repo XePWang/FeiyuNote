@@ -122,7 +122,7 @@ class Generator(
                 val entries = store.readEntries(user.lessonId, includeArchived = true)
                 val reference = user.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
                 val template = user.templateId?.let { store.getTemplate(it) }
-                val input = ContextBuilder.buildTurn(user, entries, reference, template) { photos.resolvePhoto(notebookId, it.imagePath!!) }
+                val input = ContextBuilder.buildTurn(user, entries, reference, template) { photos.resolvePhoto(notebookId, it) }
                 val answer = generate(requireConfig(), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
                 message = if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) null else DISCARDED
             } catch (e: CancellationException) {
@@ -146,15 +146,15 @@ class Generator(
             return context.getString(R.string.reference_gone)
         }
         if (question.templateId != null && store.getTemplate(question.templateId) == null) return TEMPLATE_GONE
-        question.imagePath?.let { if (!photos.isUsable(notebookId, it)) return context.getString(R.string.photo_incomplete) }
+        question.imagePaths.forEach { if (!photos.isUsable(notebookId, it)) return context.getString(R.string.photo_incomplete) }
         if (question.attachedImageEntryIds.isNotEmpty()) {
             val attached = store.getEntries(question.attachedImageEntryIds)
             val missing = question.attachedImageEntryIds.size - attached.count { e ->
-                e.imagePath != null && photos.isUsable(notebookId, e.imagePath)
+                e.imagePaths.isNotEmpty() && e.imagePaths.all { photos.isUsable(notebookId, it) }
             }
             if (missing > 0) return context.getString(R.string.photos_missing_count, missing)
         }
-        if (question.text.isBlank() && question.imagePath == null && question.action == EntryAction.ASK) {
+        if (question.text.isBlank() && question.imagePaths.isEmpty() && question.action == EntryAction.ASK) {
             return context.getString(R.string.question_required)
         }
         return null

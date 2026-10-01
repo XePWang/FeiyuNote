@@ -21,7 +21,7 @@ import java.io.File
  */
 class ContextBuilderTest {
     private fun user(id: Long, text: String, parent: Long? = null, photo: String? = null) =
-        Entry(id, 1, EntryKind.USER, EntryAction.ASK, text, parentEntryId = parent, imagePath = photo)
+        Entry(id, 1, EntryKind.USER, EntryAction.ASK, text, parentEntryId = parent, imagePaths = listOfNotNull(photo))
 
     private fun answer(id: Long, parent: Long, text: String, state: EntryState = EntryState.COMPLETE) =
         Entry(id, 1, EntryKind.ASSISTANT, text = text, parentEntryId = parent, state = state)
@@ -32,7 +32,7 @@ class ContextBuilderTest {
         user(5, "分支B", parent = 2, photo = "p5.jpg"), answer(6, 5, "讲解B"),
         user(7, "另一题", photo = "p7.jpg"), answer(8, 7, "讲解7"),
     )
-    private val resolve: (Entry) -> File = { File(it.imagePath!!) }
+    private val resolve: (String) -> File = { File(it) }
 
     @Test fun followUpSendsOnlySelectedChainTextByDefault() {
         val target = user(9, "继续问", parent = 4)
@@ -47,6 +47,15 @@ class ContextBuilderTest {
         val target = user(9, "看原图", parent = 4).copy(attachedImageEntryIds = listOf(1, 5, 7))
         val input = ContextBuilder.buildTurn(target, lesson + target, null, null, resolve)
         assertEquals(listOf(File("p1.jpg")), input.messages.last().images)
+    }
+
+    @Test fun multipleOwnAndSelectedPhotosKeepTheirOrder() {
+        val earlier = lesson.map { if (it.id == 1L) it.copy(imagePaths = listOf("a.jpg", "b.jpg")) else it }
+        val target = user(9, "", parent = 4).copy(imagePaths = listOf("c.jpg", "d.jpg"), attachedImageEntryIds = listOf(1, 5))
+        val input = ContextBuilder.buildTurn(target, earlier + target, null, null, resolve)
+        assertEquals(listOf("c.jpg", "d.jpg", "a.jpg", "b.jpg"), input.messages.last().images.map { it.name })
+        assertTrue(input.messages.dropLast(1).all { it.images.isEmpty() })
+        assertEquals(StudyPrompts.IDENTIFY_AND_EXPLAIN, input.messages.last().text)
     }
 
     @Test fun photoOnlyAskUsesBuiltInInstruction() {

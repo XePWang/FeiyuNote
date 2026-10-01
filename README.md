@@ -28,6 +28,18 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 - 笔记支持离线阅读、编辑/预览、HTML 导出与系统分享。
 - 0.2 原生离线 LaTeX 公式：行内支持 `$...$` 与 `\(...\)`，独立公式支持 `$$...$$` 与 `\[...\]`。支持常用分式、根号、积分和矩阵；宽公式横向滚动。复制保留公式源码，HTML 导出内嵌公式图片。不支持的语法显示原文，不支持完整 TeX 文档或自定义宏。
 
+## 版本更新
+
+- **0.3.0**：一条提问支持多张图片；相册多选、继续拍照追加、逐张预览和移除，导入失败保留其他图片。旧单图笔记自动迁移，多图支持重试与删除清理。使用系统照片选择器，无需整个相册的读取权限。
+- **[0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)**：对话、笔记与导出支持离线 LaTeX；新增编辑/预览及源码复制，完善 API Key 加密与凭据保护。
+- **[0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)**：课程/课次问答、刷题本、笔记整理与导出；中英界面、鲸鱼头像与自适应布局。
+
+## 后续方向
+
+近期候选：改善回答中 Markdown 格式的显示，清理未发送图片的残留文件，补齐真实折叠屏验证。较远期考虑讲解模板扩展和复习卡片；尚无固定排期，范围通过 Issue 讨论后确定。
+
+有其他需求，欢迎[提出功能建议](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=feature.yml)，说明使用场景；参与开发请先阅读[贡献指南](CONTRIBUTING.md)。
+
 ## 构建与验证
 
 需要 JDK 21、Android SDK（compileSdk 37）和网络连接。Android Studio 可直接打开项目。

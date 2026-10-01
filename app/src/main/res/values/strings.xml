@@ -130,7 +130,7 @@
     <string name="more_options">More options</string>
     <string name="welcome_title">Make room for understanding</string>
     <string name="welcome_short">Capture a question. Explore the reasoning. Keep what you learn.</string>
-    <string name="welcome_body">Type a question, take a photo or choose an image. Explore it with DeepSeek, then turn the conversation into study notes.</string>
+    <string name="welcome_body">Type a question, take photos or choose multiple images. Explore it with DeepSeek, then turn the conversation into study notes.</string>
     <string name="deepseek_connection">Connect to DeepSeek</string>
     <string name="key_private">Your key is encrypted on this device. Leave blank to keep the saved key.</string>
     <string name="api_guide_title">How do I get an API key?</string>
@@ -182,4 +182,8 @@
     <string name="edit_note">Edit</string>
     <string name="preview_note">Preview</string>
     <string name="scroll_formula">Swipe horizontally to see the full formula</string>
+    <string name="photo_count">%1$d photos</string>
+    <string name="remove_photo_number">Remove %1$d</string>
+    <string name="importing_photos">Importing photos…</string>
+    <string name="image_import_failed_count">Could not import %1$d image(s). Other selected photos were kept.</string>
 </resources>

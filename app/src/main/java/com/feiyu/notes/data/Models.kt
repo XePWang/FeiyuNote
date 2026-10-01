@@ -41,8 +41,8 @@ data class Entry(
     val parentEntryId: Long? = null,
     /** note: summarized entries; user: the selected reference note. */
     val sourceEntryIds: List<Long> = emptyList(),
-    /** File name inside the notebook's image directory. */
-    val imagePath: String? = null,
+    /** Ordered file names inside the notebook's image directory. */
+    val imagePaths: List<String> = emptyList(),
     /** User entries whose photos were attached to this follow-up. */
     val attachedImageEntryIds: List<Long> = emptyList(),
     /** Template actually used; may dangle after the template is deleted. */

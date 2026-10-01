@@ -1,6 +1,7 @@
 package com.feiyu.notes.data
 
 import android.content.Context
+import kotlinx.serialization.json.Json
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
@@ -60,7 +61,7 @@ class NotebookDatabase(context: Context, name: String? = NAME) :
                 text TEXT NOT NULL,
                 parent_entry_id INTEGER REFERENCES entries(id) ON DELETE CASCADE,
                 source_entry_ids TEXT NOT NULL DEFAULT '[]',
-                image_path TEXT,
+                image_paths TEXT NOT NULL DEFAULT '[]',
                 attached_image_entry_ids TEXT NOT NULL DEFAULT '[]',
                 template_id INTEGER,
                 state TEXT,
@@ -76,11 +77,19 @@ class NotebookDatabase(context: Context, name: String? = NAME) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // First schema version; add migrations here when VERSION increases.
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE entries ADD COLUMN image_paths TEXT NOT NULL DEFAULT '[]'")
+            db.rawQuery("SELECT id, image_path FROM entries WHERE image_path IS NOT NULL", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    db.execSQL("UPDATE entries SET image_paths = ? WHERE id = ?",
+                        arrayOf<Any>(Json.encodeToString(listOf(cursor.getString(1))), cursor.getLong(0)))
+                }
+            }
+        }
     }
 
     companion object {
         const val NAME = "notes.db"
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }

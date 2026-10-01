@@ -101,7 +101,7 @@ class NotebookStore(
         val notebookId = getLesson(id)?.notebookId ?: return false
         var images = emptyList<String>()
         val deleted = write {
-            images = query("SELECT image_path FROM entries WHERE lesson_id = ? AND image_path IS NOT NULL", id) { it.getString(0) }
+            images = query("SELECT image_paths FROM entries WHERE lesson_id = ?", id) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
             db.delete("lessons", "id = ?", args(id)) == 1
         }
         if (deleted) withContext(io) { photos.deletePhotos(notebookId, images) }
@@ -248,10 +248,10 @@ class NotebookStore(
             images = query(
                 """
                 WITH RECURSIVE t(id) AS (SELECT ? UNION ALL SELECT e.id FROM entries e JOIN t ON e.parent_entry_id = t.id)
-                SELECT image_path FROM entries WHERE id IN (SELECT id FROM t) AND image_path IS NOT NULL
+                SELECT image_paths FROM entries WHERE id IN (SELECT id FROM t)
                 """,
                 rootId,
-            ) { it.getString(0) }
+            ) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
             db.delete("entries", "id = ?", args(rootId)) == 1
         }
         if (deleted) withContext(io) { photos.deletePhotos(notebookId, images) }
@@ -350,7 +350,7 @@ class NotebookStore(
         put("text", text)
         put("parent_entry_id", parentEntryId)
         put("source_entry_ids", Json.encodeToString(sourceEntryIds))
-        put("image_path", imagePath)
+        put("image_paths", Json.encodeToString(imagePaths))
         put("attached_image_entry_ids", Json.encodeToString(attachedImageEntryIds))
         put("template_id", templateId)
         put("state", state?.db)
@@ -384,7 +384,7 @@ class NotebookStore(
         text = str("text")!!,
         parentEntryId = long("parent_entry_id"),
         sourceEntryIds = ids("source_entry_ids"),
-        imagePath = str("image_path"),
+        imagePaths = Json.decodeFromString(str("image_paths") ?: "[]"),
         attachedImageEntryIds = ids("attached_image_entry_ids"),
         templateId = long("template_id"),
         state = enumOf<EntryState>(str("state")),

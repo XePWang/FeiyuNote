@@ -30,7 +30,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * UI state of one lesson screen: draft, pending photo, reply target and selections.
+ * UI state of one lesson screen: draft, pending photos, reply target and selections.
  * Everything a user typed or picked lives in [SavedStateHandle]; requests belong to [Generator].
  */
 class StudyViewModel(
@@ -63,7 +63,11 @@ class StudyViewModel(
     val draft = handle.getStateFlow(DRAFT, "")
     val action = handle.getStateFlow(ACTION, EntryAction.ASK.name)
     val parentId = handle.getStateFlow(PARENT, NONE)
-    val photoName = handle.getStateFlow<String?>(PHOTO, null)
+    val photoNames = handle.getStateFlow(PHOTOS, arrayListOf<String>())
+    private val _importing = MutableStateFlow(false)
+    val importing = _importing.asStateFlow()
+    private val _sending = MutableStateFlow(false)
+    val sending = _sending.asStateFlow()
     val attached = handle.getStateFlow(ATTACHED, LongArray(0))
     val referenceId = handle.getStateFlow(REFERENCE, NONE)
     val templateOverride = handle.getStateFlow(TEMPLATE_OVERRIDE, false)
@@ -116,71 +120,97 @@ class StudyViewModel(
         val name = handle.get<String>(CAPTURING) ?: return
         handle[CAPTURING] = null
         if (success && photos.isUsable(notebookId, name)) {
-            photoName.value?.let { old -> photos.deletePhotos(notebookId, listOf(old)) } // re-take replaces unsent photo
-            handle[PHOTO] = name
+            handle[PHOTOS] = ArrayList(photoNames.value + name)
         } else {
             photos.deletePhotos(notebookId, listOf(name)) // only this capture's empty temp file
         }
     }
 
-    /** Copies a picked gallery image into the notebook's image dir; only a decodable copy becomes the attachment. */
-    fun importPhoto(uri: Uri) = viewModelScope.launch {
-        val file = photos.allocatePhoto(notebookId)
-        val ok = withContext(Dispatchers.IO) {
-            runCatching {
-                app.contentResolver.openInputStream(uri)!!.use { input -> file.outputStream().use { input.copyTo(it) } }
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.path, bounds)
-                bounds.outWidth > 0 && bounds.outHeight > 0
-            }.getOrDefault(false)
-        }
-        if (ok) {
-            photoName.value?.let { old -> photos.deletePhotos(notebookId, listOf(old)) } // replaces unsent photo
-            handle[PHOTO] = file.name
-        } else {
-            file.delete()
-            _notice.value = context.getString(R.string.invalid_image)
+    /** Copy selected images sequentially; append usable files and clean up failed/cancelled copies. */
+    fun importPhotos(uris: List<Uri>) = viewModelScope.launch {
+        if (_importing.value || _sending.value || uris.isEmpty()) return@launch
+        _importing.value = true
+        var failed = 0
+        try {
+            for (uri in uris.distinct()) {
+                var file: File? = null
+                var adopted = false
+                try {
+                    file = photos.allocatePhoto(notebookId)
+                    val target = file
+                    val ok = withContext(Dispatchers.IO) {
+                        runCatching {
+                            app.contentResolver.openInputStream(uri)!!.use { input ->
+                                target.outputStream().use { input.copyTo(it) }
+                            }
+                            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeFile(target.path, bounds)
+                            bounds.outWidth > 0 && bounds.outHeight > 0
+                        }.getOrDefault(false)
+                    }
+                    if (ok) {
+                        handle[PHOTOS] = ArrayList(photoNames.value + target.name)
+                        adopted = true
+                    } else failed++
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    failed++
+                } finally {
+                    if (!adopted) file?.delete()
+                }
+            }
+            if (failed > 0) _notice.value = context.getString(R.string.image_import_failed_count, failed)
+        } finally {
+            _importing.value = false
         }
     }
 
-    fun removePhoto() {
-        photoName.value?.let { photos.deletePhotos(notebookId, listOf(it)) }
-        handle[PHOTO] = null
+    fun removePhoto(name: String) {
+        if (_importing.value || _sending.value || name !in photoNames.value) return
+        handle[PHOTOS] = ArrayList(photoNames.value - name)
+        photos.deletePhotos(notebookId, listOf(name))
     }
 
-    fun photoFile(entry: Entry): File? = entry.imagePath?.let { photos.resolvePhoto(notebookId, it) }
-    fun pendingPhotoFile(): File? = photoName.value?.let { photos.resolvePhoto(notebookId, it) }
+    fun photoFiles(entry: Entry): List<File> = entry.imagePaths.map { photos.resolvePhoto(notebookId, it) }
+    fun pendingPhotoFile(name: String): File = photos.resolvePhoto(notebookId, name)
 
     // ---- generation ----
 
     fun send() = viewModelScope.launch {
-        val act = EntryAction.valueOf(action.value)
-        val question = Entry(
-            id = 0,
-            lessonId = lessonId,
-            kind = EntryKind.USER,
-            action = act,
-            text = draft.value.trim(),
-            parentEntryId = parentId.value.orNull(),
-            sourceEntryIds = listOfNotNull(referenceId.value.orNull()),
-            imagePath = photoName.value,
-            attachedImageEntryIds = attached.value.toList(),
-            templateId = effectiveTemplateId(),
-        )
-        if (act == EntryAction.MISTAKE && question.text.isBlank() && question.imagePath == null) {
-            _notice.value = context.getString(R.string.solution_required)
-            return@launch
-        }
-        when (val result = generator.ask(notebookId, question)) {
-            StartResult.Started -> {
-                handle[DRAFT] = ""
-                handle[PHOTO] = null
-                handle[ATTACHED] = LongArray(0)
-                handle[PARENT] = NONE
-                handle[ACTION] = EntryAction.ASK.name
+        if (_importing.value || _sending.value) return@launch
+        _sending.value = true
+        try {
+            val act = EntryAction.valueOf(action.value)
+            val question = Entry(
+                id = 0,
+                lessonId = lessonId,
+                kind = EntryKind.USER,
+                action = act,
+                text = draft.value.trim(),
+                parentEntryId = parentId.value.orNull(),
+                sourceEntryIds = listOfNotNull(referenceId.value.orNull()),
+                imagePaths = photoNames.value.toList(),
+                attachedImageEntryIds = attached.value.toList(),
+                templateId = effectiveTemplateId(),
+            )
+            if (act == EntryAction.MISTAKE && question.text.isBlank() && question.imagePaths.isEmpty()) {
+                _notice.value = context.getString(R.string.solution_required)
+                return@launch
             }
-            StartResult.Busy -> _notice.value = BUSY
-            is StartResult.Invalid -> _notice.value = result.message
+            when (val result = generator.ask(notebookId, question)) {
+                StartResult.Started -> {
+                    handle[DRAFT] = ""
+                    handle[PHOTOS] = arrayListOf<String>()
+                    handle[ATTACHED] = LongArray(0)
+                    handle[PARENT] = NONE
+                    handle[ACTION] = EntryAction.ASK.name
+                }
+                StartResult.Busy -> _notice.value = BUSY
+                is StartResult.Invalid -> _notice.value = result.message
+            }
+        } finally {
+            _sending.value = false
         }
     }
 
@@ -223,7 +253,7 @@ class StudyViewModel(
     fun chainPhotos(): List<Entry> {
         val all = data.value?.entries.orEmpty()
         val parent = all.firstOrNull { it.id == parentId.value } ?: return emptyList()
-        return (ContextBuilder.ancestors(parent, all) + parent).filter { it.kind == EntryKind.USER && it.imagePath != null }
+        return (ContextBuilder.ancestors(parent, all) + parent).filter { it.kind == EntryKind.USER && it.imagePaths.isNotEmpty() }
     }
 
     private fun report(result: StartResult) {
@@ -253,7 +283,7 @@ class StudyViewModel(
             _notice.value = context.getString(R.string.parent_removed)
         }
         val validPhotos = chainPhotos().map { it.id }.toSet()
-        val kept = attached.value.filter { it in validPhotos && byId[it]?.imagePath?.let { p -> photos.isUsable(notebookId, p) } == true }
+        val kept = attached.value.filter { it in validPhotos && byId[it]?.imagePaths?.all { p -> photos.isUsable(notebookId, p) } == true }
         if (kept.size != attached.value.size) {
             handle[ATTACHED] = kept.toLongArray()
             _notice.value = context.getString(R.string.photos_removed)
@@ -271,7 +301,7 @@ class StudyViewModel(
                 _notice.value = context.getString(R.string.template_removed)
             }
         }
-        photoName.value?.let { if (!photos.isUsable(notebookId, it)) handle[PHOTO] = null }
+        // Keep missing draft attachments visible; send validation must not silently drop them.
     }
 
     private fun Long.orNull(): Long? = takeIf { it != NONE }
@@ -283,7 +313,7 @@ class StudyViewModel(
         const val DRAFT = "draft"
         const val ACTION = "action"
         const val PARENT = "parent"
-        const val PHOTO = "photo"
+        const val PHOTOS = "photos"
         const val CAPTURING = "capturing"
         const val ATTACHED = "attached"
         const val REFERENCE = "reference"

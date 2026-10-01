@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -232,7 +234,11 @@ fun EntryCard(
                 }
             }
             if (entry.text.isNotBlank()) MathContent(entry.text)
-            vm.photoFile(entry)?.let { PhotoThumb(it) }
+            if (entry.imagePaths.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(vm.photoFiles(entry), key = { it.name }) { PhotoThumb(it, Modifier.height(160.dp)) }
+                }
+            }
             if (isUser) UserMeta(entry, all, templates)
             if (entry.kind == EntryKind.ASSISTANT && !readOnly) AssistantActions(entry, all, practice, vm, onRetry)
         }
@@ -265,7 +271,7 @@ private fun label(context: android.content.Context, entry: Entry): String = when
 private fun UserMeta(entry: Entry, all: List<Entry>, templates: List<Template>) {
     val context = LocalContext.current
     val parts = buildList {
-        if (entry.attachedImageEntryIds.isNotEmpty()) add(context.getString(R.string.attached_count, entry.attachedImageEntryIds.size))
+        if (entry.attachedImageEntryIds.isNotEmpty()) add(context.getString(R.string.attached_count, all.filter { it.id in entry.attachedImageEntryIds }.sumOf { it.imagePaths.size }))
         entry.sourceEntryIds.firstOrNull()?.let { add(context.getString(R.string.reference_number, it)) }
         entry.templateId?.let { id -> add(templates.firstOrNull { it.id == id }?.let { context.getString(R.string.template_name, it.name) } ?: context.getString(R.string.template_deleted)) }
     }
@@ -323,7 +329,10 @@ private fun Composer(
     val draft by vm.draft.collectAsStateWithLifecycle()
     val action by vm.action.collectAsStateWithLifecycle()
     val parentId by vm.parentId.collectAsStateWithLifecycle()
-    val photoName by vm.photoName.collectAsStateWithLifecycle()
+    val photoNames by vm.photoNames.collectAsStateWithLifecycle()
+    val importing by vm.importing.collectAsStateWithLifecycle()
+    val sending by vm.sending.collectAsStateWithLifecycle()
+    val editingAttachments = importing || sending
     val attached by vm.attached.collectAsStateWithLifecycle()
     val referenceId by vm.referenceId.collectAsStateWithLifecycle()
     val templateOverride by vm.templateOverride.collectAsStateWithLifecycle()
@@ -333,7 +342,7 @@ private fun Composer(
     var pickTemplate by rememberSaveable { mutableStateOf(false) }
     var cameraError by remember { mutableStateOf<String?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { vm.onCaptureResult(it) }
-    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::importPhoto) }
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { vm.importPhotos(it) }
 
     HorizontalDivider()
     Column(Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -350,14 +359,14 @@ private fun Composer(
             val chain = vm.chainPhotos()
             if (chain.isNotEmpty()) {
                 TextButton(onClick = { showAttach = !showAttach }) {
-                    Text(if (attached.isEmpty()) context.getString(R.string.attach_original) else context.getString(R.string.selected_photos, attached.size))
+                    Text(if (attached.isEmpty()) context.getString(R.string.attach_original) else context.getString(R.string.selected_photos, chain.filter { it.id in attached }.sumOf { it.imagePaths.size }))
                 }
                 if (showAttach) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     chain.forEach { e ->
                         FilterChip(
                             selected = e.id in attached,
                             onClick = { vm.toggleAttached(e.id) },
-                            label = { Text("#${e.id} ${e.text.take(8).ifBlank { context.getString(R.string.photo) }}") },
+                            label = { Text("#${e.id} · ${context.getString(R.string.photo_count, e.imagePaths.size)} ${e.text.take(8)}") },
                         )
                     }
                 }
@@ -370,23 +379,30 @@ private fun Composer(
             val tName = effective?.let { id -> templates.firstOrNull { it.id == id }?.name } ?: context.getString(R.string.none)
             TextButton(onClick = { pickTemplate = true }) { Text(context.getString(if (!templateOverride && effective != null) R.string.template_default_name else R.string.template_name, tName)) }
         }
-        // Read the state here so this scope recomposes when a photo arrives.
-        photoName?.let { vm.pendingPhotoFile() }?.let { file ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PhotoThumb(file, Modifier.weight(1f, fill = false))
-                TextButton(onClick = vm::removePhoto) { Text(context.getString(R.string.remove)) }
+        if (photoNames.isNotEmpty()) {
+            Text(context.getString(R.string.photo_count, photoNames.size), style = MaterialTheme.typography.labelLarge)
+            LazyRow(Modifier.fillMaxWidth().testTag("pending-photos"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(photoNames, key = { _, name -> name }) { index, name ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PhotoThumb(vm.pendingPhotoFile(name), Modifier.size(96.dp, 72.dp))
+                        TextButton(enabled = !editingAttachments, onClick = { vm.removePhoto(name) }) {
+                            Text(context.getString(R.string.remove_photo_number, index + 1))
+                        }
+                    }
+                }
             }
         }
+        if (importing) Text(context.getString(R.string.importing_photos), style = MaterialTheme.typography.bodySmall)
         cameraError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         OutlinedTextField(
-            value = draft, onValueChange = vm::setDraft,
+            value = draft, onValueChange = vm::setDraft, enabled = !sending,
             label = { Text(context.getString(if (practice && action == EntryAction.MISTAKE.name) R.string.my_solution else R.string.question_hint)) },
             maxLines = 5,
             modifier = Modifier.fillMaxWidth().testTag("composer-input"),
             shape = MaterialTheme.shapes.medium,
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = {
+            TextButton(enabled = !editingAttachments, onClick = {
                 cameraError = null
                 try { camera.launch(vm.newCaptureUri()) }
                 catch (e: ActivityNotFoundException) {
@@ -395,13 +411,13 @@ private fun Composer(
                 }
             }) {
                 androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_camera), null, Modifier.size(20.dp))
-                Text(context.getString(if (photoName == null) R.string.camera else R.string.retake), Modifier.padding(start = 8.dp))
+                Text(context.getString(R.string.camera), Modifier.padding(start = 8.dp))
             }
-            TextButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+            TextButton(enabled = !editingAttachments, onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                 androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_gallery), null, Modifier.size(20.dp))
                 Text(context.getString(R.string.gallery), Modifier.padding(start = 8.dp))
             }
-            Button(enabled = !busy && (draft.isNotBlank() || photoName != null || action == EntryAction.EXPAND.name),
+            Button(enabled = !busy && !editingAttachments && (draft.isNotBlank() || photoNames.isNotEmpty() || action == EntryAction.EXPAND.name),
                 onClick = { vm.send() }, modifier = Modifier.testTag("send")) {
                 Text(context.getString(R.string.send))
                 androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_send), null, Modifier.padding(start = 8.dp).size(20.dp))

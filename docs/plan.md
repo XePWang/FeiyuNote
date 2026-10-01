@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 应用生命周期 | `K/FeiyuApp.kt` | 手工持有 `NotebookStore`、`PhotoFiles`、`Generator`；启动时调用 `markPendingInterrupted`，不自动重发请求。 |
 | 导航 | `K/ui/AppNavigation.kt` | 导航键只传笔记本、课次、条目 ID；`ListDetailSceneStrategy` 支持单双栏，`BackNavigationBehavior.PopLatest` 保证双栏返回时逐级退栈。 |
-| 数据 | `K/data/Models.kt`、`NotebookDatabase.kt`、`NotebookStore.kt` | 单库四表；按笔记本/课次限定查询，写入入口校验归档与掌握状态。事务成功后递增 `changes: StateFlow<Long>` 供页面重读；删除事务成功后再清理图片。字段与失效引用规则见 spec §5。 |
+| 数据 | `K/data/Models.kt`、`NotebookDatabase.kt`、`NotebookStore.kt` | 单库四表；按笔记本/课次限定查询，写入入口校验归档与掌握状态。事务成功后递增 `changes: StateFlow<Long>` 供页面重读；删除事务成功后再清理图片。数据库 v2 将旧单图迁移为有序图片列表；字段与失效引用规则见 spec §5。 |
 | 附件 | `K/data/PhotoFiles.kt` | 只分配、解析和删除私有 `images/<notebookId>/` 内的文件，拒绝含路径分隔符的文件名。 |
 | 凭据 | `K/settings/ApiSettings.kt` | 固定 endpoint；API Key 以 AES-256-GCM 加密，Keystore 中的加密密钥不可导出。完整配置只由 `Generator` 读取；设置页只读取模型名和 Key 是否存在，明文不进入笔记库、导出或日志。 |
 | 界面状态 | `K/settings/AppPrefs.kt`、`K/study/StudyViewModel.kt` | `AppPrefs.lastLesson: Pair<Long, Long>?` 保存笔记本与课次 ID，失效时清空；另保存课次头像索引。ViewModel 持有选择、草稿、附件等界面状态，不持有请求任务；数据变化、发送和重试前重新校验引用。 |
@@ -26,6 +26,14 @@
 SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulator`。SDK 默认位于 `%LOCALAPPDATA%\Android\Sdk`，CI 使用独立 `Feiyu_CI_API36`（`emulator-5556`），只接受模拟器目标。JDK、SDK 与 AVD 为持久环境，不应纳入临时目录清理。
 
 ## 执行记录
+
+### 0.3 多图附件（2026-10-01）
+
+- 系统多选、拍照追加、逐张移除和导入反馈复用现有附件目录与请求链路；未增加相册读取权限或依赖。数据库 v1 → v2 保留旧图片、文字与关系。
+- `scripts/ci.ps1 -Full` 通过：JVM 20 项，仪器/界面 runner `OK (33 tests)`，真实 API 冒烟默认跳过。新增覆盖旧库迁移、多图保存/删除、请求顺序、完整重试与缺图拒绝；界面覆盖多选、坏图、移除、拍照追加、取消及 Activity 重建。截图 `build/ci/screenshots/multi-photo-phone.png` 已检查。
+- 本地签名 `assembleRelease lintVitalRelease` 通过，`apksigner` 验签成功，release 的 `debuggable=false`。沿用原发布签名。
+- 断线测试发现 OkHttp 默认连接重试可能重发请求，已禁用并断言失败请求只发送一次。
+
 
 以下为截至 2026-10-01 的验证结果，不代表所有真实设备场景均已验收。
 

@@ -49,9 +49,47 @@ class NotebookStoreTest {
 
     private suspend fun ask(lessonId: Long, text: String, parent: Long? = null, image: String? = null, ref: Long? = null) =
         store.insertQuestion(
-            Entry(0, lessonId, EntryKind.USER, EntryAction.ASK, text, parentEntryId = parent, imagePath = image,
+            Entry(0, lessonId, EntryKind.USER, EntryAction.ASK, text, parentEntryId = parent, imagePaths = listOfNotNull(image),
                 sourceEntryIds = listOfNotNull(ref))
         )!!
+
+    @Test fun upgradesV1PhotosAndKeepsTextAndRelations() = runBlocking {
+        database.close()
+        val legacy = context.openOrCreateDatabase(dbName, 0, null)
+        val schema = InstrumentationRegistry.getInstrumentation().context.assets.open("notes-v1.sql").bufferedReader().use { it.readText() }
+        schema.split(';').filter { it.isNotBlank() }.forEach { legacy.execSQL(it) }
+        legacy.execSQL("INSERT INTO notebooks (id,kind,name,created_at) VALUES (1,'course','existing',1)")
+        legacy.execSQL("INSERT INTO lessons (id,notebook_id,title,created_at) VALUES (2,1,'lesson',1)")
+        val oldImage = photo(1)
+        legacy.execSQL("INSERT INTO entries (id,lesson_id,kind,action,text,image_path,created_at) VALUES (3,2,'user','ask','old question',?,1)", arrayOf(oldImage))
+        legacy.execSQL("INSERT INTO entries (id,lesson_id,kind,text,parent_entry_id,state,created_at) VALUES (4,2,'assistant','old answer',3,'complete',2)")
+        legacy.version = 1
+        legacy.close()
+        open()
+        val migrated = store.readEntries(2)
+        assertEquals(listOf(oldImage), migrated.first().imagePaths)
+        assertEquals("old question", migrated.first().text)
+        assertEquals(3L, migrated.last().parentEntryId)
+        assertEquals("old answer", migrated.last().text)
+        assertTrue(migrated.last().imagePaths.isEmpty())
+        assertTrue(photos.isUsable(1, oldImage))
+        assertEquals(2, database.readableDatabase.version)
+    }
+
+    @Test fun multiplePhotosSurviveReopenAndAreDeletedWithTheirOwner() = runBlocking {
+        val n = store.createNotebook(NotebookKind.COURSE, "multi")!!
+        val l = store.createLesson(n.id, "lesson")!!
+        val images = List(3) { photo(n.id) }
+        val (q, _) = store.insertQuestion(Entry(0, l.id, EntryKind.USER, EntryAction.ASK, "", imagePaths = images))!!
+        reopen()
+        assertEquals(images, store.getEntry(q.id)!!.imagePaths)
+        assertTrue(store.deleteThread(q.id))
+        assertTrue(images.none { photos.isUsable(n.id, it) })
+        val more = List(2) { photo(n.id) }
+        store.insertQuestion(Entry(0, l.id, EntryKind.USER, EntryAction.ASK, "", imagePaths = more))!!
+        assertTrue(store.deleteLesson(l.id))
+        assertTrue(more.none { photos.isUsable(n.id, it) })
+    }
 
     @Test fun notebooksAreIsolatedAndRenameKeepsPhotos() = runBlocking {
         val a = store.createNotebook(NotebookKind.COURSE, "数学")!!
@@ -69,7 +107,7 @@ class NotebookStoreTest {
         val entries = store.readEntries(la.id)
         assertEquals(2, entries.size)
         assertTrue(entries.all { it.lessonId == la.id })
-        assertEquals(img, entries.first { it.id == q.id }.imagePath)
+        assertEquals(listOf(img), entries.first { it.id == q.id }.imagePaths)
         assertTrue(photos.isUsable(a.id, img))
         assertEquals("高等数学", store.getNotebook(a.id)!!.name)
     }

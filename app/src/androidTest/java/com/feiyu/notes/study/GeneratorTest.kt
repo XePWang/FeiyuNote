@@ -190,6 +190,22 @@ class GeneratorTest {
         assertNull(store.getLesson(lesson.id))
     }
 
+    @Test fun multiPhotoRetryKeepsAllImagesAndRejectsAMissingOne() = runBlocking {
+        val files = List(2) { photos.allocatePhoto(notebook.id).apply { writeText("synthetic photo") } }
+        assertEquals(StartResult.Started, generator.ask(notebook.id, question("").copy(imagePaths = files.map { it.name })))
+        gate.complete(AiReply("answer"))
+        idle()
+        assertEquals(files, inputs.last().messages.last().images)
+        val user = entries().single { it.kind == EntryKind.USER }
+        gate = CompletableDeferred<AiReply>().apply { complete(AiReply("retry")) }
+        assertEquals(StartResult.Started, generator.retry(notebook.id, user.id))
+        idle()
+        assertEquals(files, inputs.last().messages.last().images)
+        files.last().delete()
+        assertTrue(generator.retry(notebook.id, user.id) is StartResult.Invalid)
+        assertEquals(2, calls.get())
+    }
+
     @Test fun staleReferencesAreRejectedBeforeSaving() = runBlocking {
         val other = store.createNotebook(NotebookKind.COURSE, "other")!!
         val foreignNote = store.commitSummary(store.createLesson(other.id, "x")!!.id, "n", emptyList(), null)!!
@@ -200,7 +216,7 @@ class GeneratorTest {
         store.deleteTemplate(template.id)
         assertTrue(generator.ask(notebook.id, question("q").copy(templateId = template.id)) is StartResult.Invalid)
 
-        assertTrue(generator.ask(notebook.id, question("").copy(imagePath = "missing.jpg")) is StartResult.Invalid)
+        assertTrue(generator.ask(notebook.id, question("").copy(imagePaths = listOf("missing.jpg"))) is StartResult.Invalid)
         assertTrue(entries().isEmpty())
         assertEquals(0, calls.get())
     }

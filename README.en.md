@@ -28,6 +28,18 @@ API keys use AES-256-GCM encryption in private storage, with non-exportable encr
 - Notes support offline reading, edit/preview modes, HTML export, and system sharing.
 - Version 0.2 renders LaTeX offline: inline `$...$` or `\(...\)`, and display `$$...$$` or `\[...\]`. Common fractions, roots, integrals, and matrices are supported; wide formulas scroll horizontally. Copying preserves formula source, and HTML exports embed formula images. Unsupported syntax falls back to raw text. Full TeX documents and custom macros are not supported.
 
+## Version history
+
+- **0.3.0**: Attach multiple images to one question. Select several photos, append camera captures, preview and remove individual attachments. Failed imports keep the other images. Existing single-image notes migrate automatically; retry and deletion handle all attachments. Uses the system photo picker without full-library permission.
+- **[0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)**: Offline LaTeX in conversations, notes, and exports; edit/preview modes and source copying; improved API-key encryption and credential protection.
+- **[0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)**: Course/session conversations, practice notebooks, note summaries and exports; Chinese/English UI, whale avatars, and adaptive layouts.
+
+## Planned directions
+
+Near-term candidates: improve Markdown display in answers, clean up orphaned unsent images, and verify real foldable devices. Longer-term ideas include richer explanation templates and revision cards. There is no fixed schedule; scope is agreed through Issues.
+
+[Suggest a feature](https://github.com/Yongzhaooo/FeiyuNote/issues/new?template=feature.yml) with your use case. For implementation contributions, read the [contribution guide](CONTRIBUTING.md#english) first.
+
 ## Build and verify
 
 Requires JDK 21, Android SDK (compileSdk 37), and an internet connection. Android Studio can open the project directly.

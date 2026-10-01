@@ -2,6 +2,10 @@
 
 **Project outcome:** 在安卓手机、平板或折叠屏上按课程、课次拍照或选图提问，获得 DeepSeek 讲解并整理成本地笔记；刷题本记录错题与掌握状态。[spec](spec.md) 定义产品规则，[plan](plan.md) 保存实现边界与验证证据。
 
+## In progress
+
+**多图附件与 0.3 更新** — running; resume: 当前工作树的附件列表迁移、选择器与回归测试；next: 本地完整 CI 和签名构建已通过；TB321FU 已安装，待解锁检查；PHP110 安装等待系统交互，随后验证远端发布。
+
 ## Next actions
 
 以下两项待选择范围：
@@ -11,7 +15,7 @@
 
 ## Waiting
 
-**备用机基础检查** — PHP110 安装受系统滑块验证阻塞，最终 APK 在 `Download/feiyu-notes-v0.2.0.apk`，尚未完成安装/运行验收；clearing: 用户完成手机上的验证后继续检查；supplier: 用户。
+**设备安装与界面检查** — PHP110 正在显示另一应用的安装确认，0.3.0 安装排队等待；TB321FU 已安装 versionCode 3，界面受锁屏阻挡。clearing: 用户处理手机安装提示并解锁平板；supplier: 用户。
 
 **原模拟器残留占用** — Feiyu_Fold_API36 进程仍占用 5554/文件锁，原数据盘保留；CI 使用独立 Feiyu_CI_API36（5556）；clearing: 重启 Windows 后检查原实例；supplier: 本机环境。
 

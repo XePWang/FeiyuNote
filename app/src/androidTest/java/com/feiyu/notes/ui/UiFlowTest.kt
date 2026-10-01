@@ -211,22 +211,47 @@ class UiFlowTest {
         awaitAnswer("答案1")
         assertEquals(1, inputs.last().messages.last().images.size)
 
-        // Gallery: the picked image is copied into the notebook's image dir.
-        val picked = File(app.cacheDir, "exports/picked.png").apply { parentFile!!.mkdirs() }
-        picked.outputStream().use { testBitmap(Color.BLUE).compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // Multi-select includes an invalid file: retain usable copies, report the failed one.
+        val picked = listOf(Color.BLUE, Color.GREEN, Color.YELLOW).mapIndexed { index, color ->
+            File(app.cacheDir, "exports/picked-$index.png").apply {
+                parentFile!!.mkdirs()
+                outputStream().use { testBitmap(color).compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        val invalid = File(app.cacheDir, "exports/invalid.png").apply { writeText("not an image") }
+        val clip = android.content.ClipData.newRawUri("photos", providerUri(picked.first()))
+        (picked.drop(1) + invalid).forEach { clip.addItem(android.content.ClipData.Item(providerUri(it))) }
         intending(hasAction(MediaStore.ACTION_PICK_IMAGES)).respondWith(
-            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(providerUri(picked)))
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().apply { clipData = clip })
         )
         click("相册")
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("移除").fetchSemanticsNodes().isNotEmpty() }
-        ask("这张图是什么颜色")
+        waitText("3 张图片")
+        waitText("1 张图片导入失败，其余已选图片已保留")
+        // Activity recreation retains all draft attachments; removing one deletes only that copy.
+        scenario!!.recreate()
+        waitText("3 张图片")
+        click("移除第 2 张")
+        waitText("2 张图片")
+        click("拍照")
+        waitText("3 张图片")
+        intending(hasAction(MediaStore.ACTION_PICK_IMAGES)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null))
+        click("相册")
+        waitText("3 张图片")
+        shell("wm size 1080x2300")
+        compose.waitForIdle()
+        screenshot("multi-photo-phone")
+        ask("这些图片是什么颜色")
         awaitAnswer("答案2")
         val sent = inputs.last().messages.last()
-        assertEquals(1, sent.images.size)
-        assertTrue("copied into the private image root", sent.images.single().path.startsWith(File(root, "images").path))
-        val photos = runBlocking { app.store.readEntries(app.store.listLessons(app.store.listNotebooks().single().id).single().id) }
-            .filter { it.kind == EntryKind.USER }.mapNotNull { it.imagePath }
-        assertEquals(2, photos.size)
+        assertEquals(3, sent.images.size)
+        assertTrue(sent.images.all { it.path.startsWith(File(root, "images").path) })
+        assertEquals(listOf(Color.BLUE, Color.YELLOW, Color.RED), sent.images.map {
+            android.graphics.BitmapFactory.decodeFile(it.path).let { bitmap -> bitmap.getPixel(0, 0).also { bitmap.recycle() } }
+        })
+        val photos = runBlocking { app.store.readEntries(app.prefs.lastLesson!!.second) }
+            .filter { it.kind == EntryKind.USER }.flatMap { it.imagePaths }
+        assertEquals(4, photos.size)
+        assertEquals("failed/removed copies cleaned up", 4, File(root, "images").walkTopDown().count { it.isFile })
     }
 
     @Test fun practiceBookMasteryAndMistakeOnlyInPractice() {

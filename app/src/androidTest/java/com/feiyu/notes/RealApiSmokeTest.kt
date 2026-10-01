@@ -61,9 +61,9 @@ class RealApiSmokeTest {
 
         try {
             // 1. Photo only: built-in "识别并讲解".
-            val a1 = run("1 控制系统例题（仅照片）", Entry(0, lesson.id, EntryKind.USER, EntryAction.ASK, "", imagePath = photo("control.webp")))
+            val a1 = run("1 控制系统例题（仅照片）", Entry(0, lesson.id, EntryKind.USER, EntryAction.ASK, "", imagePaths = listOf(photo("control.webp"))))
             // 2. Photo + text.
-            val a2 = run("2 黑板（照片+文字）", Entry(0, lesson.id, EntryKind.USER, EntryAction.ASK, "黑板上讲的是什么概念？请用一个 3x3 的具体例子说明。", imagePath = photo("blackboard.webp")))
+            val a2 = run("2 黑板（照片+文字）", Entry(0, lesson.id, EntryKind.USER, EntryAction.ASK, "黑板上讲的是什么概念？请用一个 3x3 的具体例子说明。", imagePaths = listOf(photo("blackboard.webp"))))
             // 3. Follow-up on #1 with the original photo attached from the chain.
             val root1 = store.getEntry(a1.parentEntryId!!)!!
             val a3 = run("3 追问并附原图", Entry(0, lesson.id, EntryKind.USER, EntryAction.ASK, "根据图(b)的超调量和峰值时间，具体算出 ξ、ωn，以及 K1、K2、a 的数值。", parentEntryId = a1.id, attachedImageEntryIds = listOf(root1.id)))
