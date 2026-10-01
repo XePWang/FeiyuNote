@@ -1,0 +1,22 @@
+# Site block for the global Caddyfile; add it through the vps-management workflow.
+# No `log` directive: Caddy keeps no access log for this site.
+feiyunote.cangming.fyi {
+	handle /api/v1/feedback {
+		request_body {
+			max_size 512KB
+		}
+		reverse_proxy 127.0.0.1:8787
+	}
+	handle /updates/* {
+		root * /srv/feiyunote
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle /feiyu/* {
+		root * /srv/feiyunote
+		file_server
+	}
+	handle {
+		respond 404
+	}
+}

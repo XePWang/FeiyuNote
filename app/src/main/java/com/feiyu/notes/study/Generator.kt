@@ -14,6 +14,9 @@ import com.feiyu.notes.data.EntryKind
 import com.feiyu.notes.data.EntryState
 import com.feiyu.notes.data.NotebookStore
 import com.feiyu.notes.data.PhotoFiles
+import com.feiyu.notes.support.DiagnosticOperation
+import com.feiyu.notes.support.DiagnosticResult
+import com.feiyu.notes.support.Diagnostics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -54,6 +57,7 @@ class Generator(
     private val generate: suspend (AiConfig, AiInput) -> AiReply = { config, input -> DeepSeekClient(config).generate(input) },
     /** Current text of a built-in system prompt (user override or default). */
     private val prompt: (PromptKind) -> String = { it.default },
+    private val diagnostics: Diagnostics? = null,
 ) {
     private val context get() = AppLanguage.context(appContext)
     private val _status = MutableStateFlow(GenerationStatus())
@@ -90,12 +94,16 @@ class Generator(
         // UNDISPATCHED: the body (and its finally) always runs, even if cancelled right away.
         job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var message = CANCELLED
+            val started = System.nanoTime()
             try {
                 val reply = generate(requireConfig(lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
+                diagnostics?.record(DiagnosticOperation.SUMMARIZE, DiagnosticResult.OK, durationMs = elapsed(started))
                 message = if (store.commitSummary(lessonId, reply.text, sources, templateId) != null) context.getString(R.string.summary_created) else DISCARDED
             } catch (e: CancellationException) {
+                diagnostics?.record(DiagnosticOperation.SUMMARIZE, DiagnosticResult.CANCELLED, durationMs = elapsed(started))
                 throw e
             } catch (e: Exception) {
+                diagnostics?.recordFailure(DiagnosticOperation.SUMMARIZE, e, elapsed(started))
                 message = describe(e)
             } finally {
                 finish(running, message)
@@ -120,6 +128,7 @@ class Generator(
         // UNDISPATCHED: the body (and its finally) always runs, even if cancelled right away.
         job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var message: String? = CANCELLED
+            val started = System.nanoTime()
             try {
                 val entries = store.readEntries(user.lessonId, includeArchived = true)
                 val reference = user.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
@@ -127,11 +136,14 @@ class Generator(
                 val base = prompt(if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) PromptKind.GENERAL else PromptKind.STUDY)
                 val input = ContextBuilder.buildTurn(user, entries, reference, template, resolvePhoto = { photos.resolvePhoto(notebookId, it) }, base = base)
                 val answer = generate(requireConfig(user.lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
+                diagnostics?.record(DiagnosticOperation.GENERATE, DiagnosticResult.OK, durationMs = elapsed(started))
                 message = if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) null else DISCARDED
             } catch (e: CancellationException) {
+                diagnostics?.record(DiagnosticOperation.GENERATE, DiagnosticResult.CANCELLED, durationMs = elapsed(started))
                 withContext(NonCancellable) { store.commitReply(reply.id, context.getString(R.string.cancelled), EntryState.CANCELLED) }
                 throw e
             } catch (e: Exception) {
+                diagnostics?.recordFailure(DiagnosticOperation.GENERATE, e, elapsed(started))
                 val failure = describe(e)
                 message = failure
                 withContext(NonCancellable) { store.commitReply(reply.id, failure, EntryState.FAILED) }
@@ -185,6 +197,8 @@ class Generator(
         busy.set(false)
         _status.update { if (it.running === running) GenerationStatus(message = message) else it }
     }
+
+    private fun elapsed(started: Long) = (System.nanoTime() - started) / 1_000_000
 
     private fun describe(e: Exception): String = when (e) {
         is AiError.MissingKey -> context.getString(R.string.error_key)

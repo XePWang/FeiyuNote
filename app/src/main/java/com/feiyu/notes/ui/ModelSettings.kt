@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.feiyu.notes.R
+import com.feiyu.notes.support.DiagnosticOperation
+import com.feiyu.notes.support.DiagnosticResult
 import com.feiyu.notes.app
 import com.feiyu.notes.ai.*
 import com.feiyu.notes.settings.ApiSettings
@@ -71,11 +73,14 @@ fun ConnectionTest(settings: ApiSettings, typedKey: String? = null, enabled: Boo
             busy = true; result = null
             try {
                 val models = settings.refreshModels(typedKey)
+                context.app.diagnostics.record(DiagnosticOperation.CONNECTION_TEST, DiagnosticResult.OK)
                 result = context.getString(R.string.connection_ok, models.size)
             } catch (e: TimeoutCancellationException) {
+                context.app.diagnostics.recordFailure(DiagnosticOperation.CONNECTION_TEST, e)
                 result = context.getString(R.string.connection_failed)
             } catch (e: CancellationException) { throw e
             } catch (e: Exception) {
+                context.app.diagnostics.recordFailure(DiagnosticOperation.CONNECTION_TEST, e)
                 result = context.getString(when (e) {
                     is AiError.MissingKey -> R.string.key_missing
                     is AiError.Auth -> R.string.connection_auth_failed

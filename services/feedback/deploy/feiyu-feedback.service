@@ -1,0 +1,19 @@
+[Unit]
+Description=Feiyu Notes feedback receiver
+After=network.target
+
+[Service]
+User=feiyu-feedback
+Group=feiyu-feedback
+ExecStart=/usr/bin/python3 /opt/feiyu-feedback/server.py serve --db /var/lib/feiyu-feedback/feedback.db --host 127.0.0.1 --port 8787
+Restart=on-failure
+# The service never logs requests; keep stray output out of the journal as well.
+StandardOutput=null
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/feiyu-feedback
+
+[Install]
+WantedBy=multi-user.target

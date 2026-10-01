@@ -1,6 +1,9 @@
 package com.feiyu.notes.study
 
 import com.feiyu.notes.R
+import com.feiyu.notes.support.DiagnosticOperation
+import com.feiyu.notes.support.DiagnosticResult
+import com.feiyu.notes.support.ErrorKind
 import com.feiyu.notes.settings.AppLanguage
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -161,6 +164,11 @@ class StudyViewModel(
                 }
             }
             if (failed > 0) _notice.value = context.getString(R.string.image_import_failed_count, failed)
+            app.diagnostics.record(
+                DiagnosticOperation.IMAGE_IMPORT,
+                if (failed > 0) DiagnosticResult.FAILED else DiagnosticResult.OK,
+                error = ErrorKind.IMAGE_UNREADABLE.takeIf { failed > 0 },
+            )
         } finally {
             _importing.value = false
         }
