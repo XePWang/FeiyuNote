@@ -343,7 +343,7 @@ class UiFlowTest {
         createNotebook("新建课程", "英语")
         click("英语")
         click("新课次")
-        compose.onNodeWithTag("composer-input").performTextInput("草稿不丢")
+        typeDraft("草稿不丢")
 
         shell("wm size 2076x2152")
         waitText("新课次") // list pane visible next to the lesson
@@ -467,9 +467,15 @@ class UiFlowTest {
     }
 
     private fun ask(text: String) {
-        compose.onNodeWithTag("composer-input").performTextInput(text)
+        typeDraft(text)
         compose.onNodeWithTag("send").performClick()
         hideKeyboard()
+    }
+
+    /** The lesson pane composes after navigation settles; wait for the input before typing. */
+    private fun typeDraft(text: String) {
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("composer-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("composer-input").performTextInput(text)
     }
 
     private fun click(text: String) {
