@@ -133,7 +133,7 @@ Invoke-Step 'Artifact' {
 
 if ($Full) {
     # Stamp only if nothing changed while the tests ran.
-    if ((Get-WorkTreeId) -eq $treeAtStart) { Set-Content -NoNewline $passStamp $treeAtStart }
+    if ((Get-WorkTreeId) -eq $treeAtStart) { Set-Content -LiteralPath $passStamp -Value $treeAtStart -NoNewline }
     else { Write-Host '    files changed during the run; pass not stamped' -ForegroundColor Yellow }
 }
 Write-Host ("CI passed ({0})" -f $(if ($Full) { 'full' } else { 'fast' })) -ForegroundColor Green
