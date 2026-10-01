@@ -11,7 +11,7 @@
 
 ## Waiting
 
-**真机细项检查** — TB321FU、PHP110 均已安装 0.3.1（versionCode 5），PHP110 首页启动正常；字号放大、跳转节点、设置高级区与 Skill 实际导入未在真机逐项检查。clearing: 用户试用反馈；supplier: 用户。
+**真机细项检查** — TB321FU、PHP110 均已安装 0.3.1（versionCode 6），PHP110 首页与公共聊天横幅显示正常；字号放大、跳转节点、设置高级区与 Skill 实际导入未在真机逐项检查。clearing: 用户试用反馈；supplier: 用户。
 
 **原模拟器残留占用** — Feiyu_Fold_API36 进程仍占用 5554/文件锁，原数据盘保留；CI 使用独立 Feiyu_CI_API36（5556）；clearing: 重启 Windows 后检查原实例；supplier: 本机环境。
 
