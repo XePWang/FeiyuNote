@@ -27,7 +27,7 @@ SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulat
 
 ## 0.3.2 更新与问题反馈实施计划
 
-日期：2026-10-01。状态：已规划，未实施。产品范围以 [spec §9](spec.md#9-032-更新与问题反馈待实现) 为准。本次授权为编写计划；代码修改、部署和发布等待后续执行指令，本文不创建远端 Issue、发送邮件或购买服务。
+日期：2026-10-01。状态：已规划，试用域名 DNS 已配置，客户端与服务未实施。产品范围以 [spec §9](spec.md#9-032-更新与问题反馈待实现) 为准。用户后续授权使用 `feiyunote.cangming.fyi` 并直接配置 DNS；功能实现、HTTPS/服务部署和发布仍等待后续执行指令。
 
 ### 当前基础与变更边界
 
@@ -36,11 +36,11 @@ SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulat
 - 已有 OkHttp、kotlinx.serialization、JUnit、MockWebServer、Compose 仪器测试和 FileProvider。本次客户端不增加依赖，不迁移笔记数据库。
 - `K/ai/AiTypes.kt::AiError` 的部分 message 含服务响应、网络地址或图片名；诊断不能直接写 `message`、`toString()` 或 `printStackTrace()`。保留原用户错误提示，单独映射安全的错误类型和状态码。
 - 发布入口是 `.github/workflows/android.yml`，目前只上传 GitHub Releases。`app/src/main/res/xml/file_paths.xml` 已暴露 `cache/exports/`，诊断分享可复用该目录，不扩大到整个私有目录。
-- 当前工作区有其他未提交功能，涉及设置、模板、提示词、数据层等；本计划只追加自己的范围，不覆盖或重排这些改动。历史发布记录中 0.3.1 为 versionCode 4，当前工作区为 versionCode 5 / versionName 0.3.1；版本收口由发布项统一负责，不能直接认定 5 仍未占用。
+- 2026-10-01 交接时 HEAD 为 `dda9322`（聊天卡片、引导模板、可编辑提示词与文字 Skill 已进入提交），工作区仍有 spec/plan/wayfinder 的文档改动；接手先检查实际状态，保留所有既有改动。历史发布记录中 0.3.1 为 versionCode 4，当前代码为 versionCode 5 / versionName 0.3.1；版本收口由发布项统一负责，不能直接认定 5 仍未占用。
 
 ### 实施默认值与共享接口
 
-以下为本计划提出的实施默认值。接口可据此开始本地开发；真实域名、VPS 环境、对外保留期限由 P0 收口。若修改字段、语义或限制，只暂停受影响的消费者并同步本节。
+以下为本计划提出的实施默认值。接口可据此开始本地开发；试用主机确定为 `feiyunote.cangming.fyi`，剩余 VPS 部署参数和对外保留期限由 P0 收口。预定更新源为 `https://feiyunote.cangming.fyi/updates/android.json`，下载页为 `https://feiyunote.cangming.fyi/feiyu/`，反馈入口为 `https://feiyunote.cangming.fyi/api/v1/feedback`；这些 HTTPS 路由尚未部署。若修改字段、语义或限制，只暂停受影响的消费者并同步本节。
 
 **更新接口。** 静态发布端生产 `GET /updates/android.json`，`UpdateClient` 消费；UTF-8 JSON，schemaVersion 为 1，响应上限 32 KiB，总请求超时 15 秒。只手动检查，不复用带 DeepSeek 凭据的请求构造，不携带 API Key。字段如下：
 
@@ -51,11 +51,11 @@ SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulat
   "versionName": "0.3.2",
   "minSdk": 26,
   "notes": {"zh": "更新说明", "en": "Release notes"},
-  "downloadPageUrl": "https://downloads.example.invalid/feiyu/"
+  "downloadPageUrl": "https://feiyunote.cangming.fyi/feiyu/"
 }
 ```
 
-示例中的版本号数值和域名不是发布配置。只有远端 versionCode 大于本机才提示升级；设备低于 minSdk 时说明系统不受支持并禁用下载。必需字段缺失、类型错误、不支持的 schemaVersion、超限响应均视为检查失败。说明按应用语言选择，缺少对应语言时使用英文；作为普通文本显示。更新源及下载页必须 HTTPS 且属于 P0 确认的主机白名单，重定向也逐跳校验；不得退回 GitHub。测试通过注入本地 MockWebServer 地址完成，不改变 release 的明文流量限制。
+示例中的版本号数值不是发布配置；域名已配置 DNS，但下载页仍待部署。只有远端 versionCode 大于本机才提示升级；设备低于 minSdk 时说明系统不受支持并禁用下载。必需字段缺失、类型错误、不支持的 schemaVersion、超限响应均视为检查失败。说明按应用语言选择，缺少对应语言时使用英文；作为普通文本显示。更新源及下载页必须 HTTPS 且属于 P0 确认的主机白名单，重定向也逐跳校验；不得退回 GitHub。测试通过注入本地 MockWebServer 地址完成，不改变 release 的明文流量限制。
 
 **诊断接口。** 新建 `K/support/Diagnostics.kt`，由应用生命周期及出错点生产数据，反馈预览、提交和分享消费同一份快照。对外提供 `record(event: DiagnosticEvent)`、`snapshot(): DiagnosticSnapshot` 和清理入口；使用固定事件/错误枚举和白名单字段，禁止任意 Map 或任意 message 成为日志入口。快照为 schemaVersion 1，含 `app { versionName, versionCode }`、`device { manufacturer, model, androidSdk }`、`events`、可空的 `crash` 和 `truncated`。事件字段限 UTC 时间、固定操作名、结果、错误分类、可空 HTTP 状态码及耗时；崩溃只含异常类名及限定长度的类名/方法名/源码文件名/行号，不含异常消息和运行时路径。
 
@@ -82,10 +82,14 @@ description 去除首尾空白后为 1 至 4000 个 Unicode 码点；diagnostics
 
 #### P0：确认部署地址与发布基线
 
-- 产出：确定更新源、下载页、APK 地址、反馈 API、接收方说明及 30 天保留期；确认 yz_vps 的现有反向代理、Python 3、服务目录、运行用户和存储空间。上述真实值尚未检查，不能把示例域名写入正式 APK。
+- 已完成（2026-10-01）：Porkbun API 原先没有 `feiyunote.cangming.fyi` 独立记录，公开解析来自泛域名停放。按用户授权新增 CNAME，目标 `vps.cangming.fyi`，TTL 600 秒，记录 ID `589627650`；API 读回及 Porkbun 权威 DNS、Cloudflare `1.1.1.1` 均验证通过，最终解析到 `158.101.160.20`。API 前后比较确认其他 DNS 记录未变；没有购买域名。
+- 保留约束：本次是新增子域名，`vps.cangming.fyi` 原记录、原站点及其他服务保持不变。CNAME 只提供名称解析，不是 HTTP 跳转；后续在 Caddy 新增 `feiyunote.cangming.fyi` 的站点路由，不能重命名、覆盖或重定向现有 VPS 站点。
+- 运维依据：复用了 personal-site 已有 DNS 操作方式，凭据从 NAS 受保护配置读取，仅在内存中用于 Porkbun 请求。无凭据的操作前记录保存在本机 `C:\Users\CYZ\.codex\tmp\feiyunote-dns-before-20261001T174511Z.json`（原独立记录为空）；若需回退，只删除上述新记录，不改泛域名及其他记录。
+- 已查环境：通过既有 `yz_vps` SSH 确认 `/usr/bin/python3` 和 `/usr/local/bin/caddy` 存在。全局 Caddy 的维护源为 `E:\Projects\Services\vps-management`，后续新增站点遵循该仓库的配置比对、备份、校验和显式 reload 流程。本次没有修改 Caddy、签发证书或部署站点。
+- 剩余产出：确定 APK 地址、接收方说明及 30 天保留期，核实服务目录、运行用户、存储空间和发布基线；验证 HTTPS 和实际目标用户网络。DNS 成功不代表下载页或反馈服务已上线。
 - 范围：只读查看已授权资源及现有发布版本；结果补充到本节。新增部署说明由 P2 写入 `services/feedback/README.md`，不在仓库保存密钥。版本协调覆盖当前未提交工作，最终 versionName 为 0.3.2，versionCode 严格大于所有已分发构建。
-- 步骤：先确认可复用的 HTTPS 域名和托管，再确认从目标用户网络访问下载/API 的可行性；选定已有资源，不默认购域名、订阅或新增付费存储。
-- 验证：记录地址、主机、部署路径、发布基线和实际连通结果；域名未定时明确“未验证”，不得以 VPS SSH 可达替代用户网络可达。
+- 步骤：沿用已确定的试用域名，核实 Caddy 路由和 HTTPS 部署条件，再确认从目标用户网络访问下载/API 的可行性；复用已有资源，不重复创建 DNS，不默认购域名、订阅或新增付费存储。
+- 验证：保留已有 DNS 证据，补充主机、部署路径、发布基线和实际连通结果；HTTPS 和目标用户网络未验证时分别注明，不得以 DNS 或 VPS SSH 可达替代。
 - 停止条件：缺少域名归属、服务运行环境或发布基线时暂停正式配置和上线验证；P1、P3、P4 的本地实现与模拟测试仍可继续。需要购买服务时先准备具体服务商、价格/币种、账号和条款，购买等待该具体行动的用户授权。
 
 #### P1：本地诊断与崩溃恢复提示
@@ -134,7 +138,7 @@ description 去除首尾空白后为 1 至 4000 个 Unicode 码点；diagnostics
 
 | 项目 | 实现依赖 | 验收依赖 |
 | --- | --- | --- |
-| P0 | 后续执行授权后可开始 | 用户提供或确认现有域名；实际环境与发布版本 |
+| P0 | DNS 已完成；后续执行时继续核实部署参数 | HTTPS、实际目标网络和发布版本尚待验证 |
 | P1 | 后续执行授权后可开始 | 自身单测；提示交互由 P4，完整崩溃恢复由 P5 收口 |
 | P2 | 本地代码按本节接口可开始；生产配置等 P0 | 客户端结合由 P5；代理与生产行为等部署环境 |
 | P3 | 本地代码/静态页可开始；正式主机配置等 P0 | P4 集成；真实下载及安装等 P5 |
@@ -145,7 +149,20 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 
 窄检查由各项执行者负责，P5 只补跑未验证的组合及必要完整 CI；同一产物未变化时复用证据，不让每项重复跑全套。上述命令均为计划检查，本次只检查了文档和相关代码入口，未运行功能测试或部署。
 
-下次接续：先确认执行授权并处理 P0；同时可按既定接口启动 P1、P2/P3 本地实现。将完成的工作项、实际证据、待联调项和下一入口直接更新到本节，不另建平行计划。
+### Handoff（2026-10-01）
+
+接手位置：`E:\Projects\Opensource\肥鱼笔记`。先读本仓库指令、`docs/spec.md` §9 和本计划，再核对 `git status`、HEAD 与版本号。`docs/wayfinder.md` 中的历史待办和 Skill 长期方向不自动纳入 0.3.2。
+
+- 目标：完成检查更新、独立下载、本地有界诊断、崩溃恢复提示、应用内匿名反馈和系统分享兜底；普通用户无需 GitHub。
+- 已完成：产品和接口计划；新增子域名的 Porkbun API 创建、读回及权威/公共 DNS 验证。无需重复注册或修改 `vps.cangming.fyi`。
+- 未完成：P0 剩余部署参数和版本基线；P1 至 P5 的功能代码、测试、HTTPS/服务部署与发布。现有 CI 历史结果不能作为这些新功能的验收证据。
+- 下一步：在用户给出执行指令后收口 P0 剩余项，并按共享接口实现 P1/P2/P3；P4 可先用替身开发，P5 负责唯一的最终联调和发布验收。域名已经确定，无需重新向用户询问。具体文件归属、并行条件和停止条件沿用上表。
+- 运维入口：`ssh yz_vps`。涉及全局 Caddy 时先读 `E:\Projects\Services\vps-management\AGENTS.md`、`README.md`、`docs/runbook.md`，由该仓库维护源新增站点，保留其他服务的实时配置；肥鱼笔记业务代码与部署说明继续归本项目。DNS 若确需调整，复用已有受保护凭据读取方式，不能输出或提交凭据。
+- 必须保留：原包名与签名、旧笔记/照片/设置、原 VPS 域名及站点；日志不含 Key 或学习正文，反馈失败不丢草稿，重试不重复建单。日志默认值、保留期限和接口字段以本节为准。
+- 交付证据：新增逻辑窄测试、完整本地 CI、release 验签与覆盖安装、脱离 GitHub 的下载/反馈实测、维护者按编号取回报告。只记录实际通过的检查，未具备的环境单列为待验证。
+- 授权接续：当前完成的是计划、DNS 与交接文档；本交接本身不新增功能实施或上线授权。后续用户明确要求实施或部署时，按其授权范围继续，无需重复确认已获授权的同一动作。邮件、对外消息及付费动作仍需各自的具体授权。
+
+后续把完成项、证据、待联调项和下一入口直接更新到本节，不另建平行计划。
 
 ## 执行记录
 
@@ -171,7 +188,7 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 
 | 版本 / 提交 | 验证证据 |
 | --- | --- |
-| [v0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1) · `cd1afdf` | 本地完整 CI（JVM 单测 + 34 项仪器/界面测试，新增公共聊天编号、跳转保留草稿且不发请求、会话 effort 覆盖）、release 构建与 `lintVitalRelease`、[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36894304971)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36894304555) 通过。实际 Release APK 已下载验签，证书与 0.3.0 一致，versionCode 4、versionName 0.3.1、非 debuggable。TB321FU 已覆盖安装 0.3.1；PHP110 安装等待系统确认。 |
+| [v0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1) · `dda9322` | 同版本覆盖发布：首发 `cd1afdf`（versionCode 4）后，按用户要求将公共聊天卡片、可替换首页插图、预装引导式讲解模板、内置提示词编辑与 Skill 文字导入并入 0.3.1，versionCode 升为 5，删除原 Release 并移动 tag 后重新发布。本地完整 CI（JVM 单测 + 35 项仪器/界面测试，含数据库 v3 迁移、内置提示词覆盖、公共聊天编号/跳转/会话 effort）、[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36901745507)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36901745518) 通过。实际 Release APK 已下载验签，证书与 0.3.0 一致，versionCode 5、versionName 0.3.1、非 debuggable。TB321FU 与 PHP110 均已覆盖安装 versionCode 5，PHP110 启动后首页显示正常。Skill 网络导入仅有 URL/解析单测，未连真实 GitHub 验证。 |
 | [v0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0) · `0f440de` | [main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36884434892)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36884438952) 通过。实际 Release APK 已下载验签，包名 `com.feiyu.notes`、versionCode 3、versionName 0.3.0、debuggable=false。TB321FU 已安装；手机安装与真机界面检查待系统交互，见 Wayfinder。 |
 | [v0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1) · `9fd23ea` | [main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36784905890)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36785654962) 通过，签名预览 APK 已发布。 |
 | [v0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0) · `22b5331` | 本地签名 release 构建及 `lintVitalRelease`、[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36823765077)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36823765078) 通过。下载实际 Release APK 后用 `apksigner` 验证签名，`apkanalyzer` 确认包名 `com.feiyu.notes`、versionCode 2、versionName 0.2.0、debuggable=false。 |
