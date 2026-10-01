@@ -176,20 +176,22 @@ fun NoteScreen(
             initialTopic = defaultTopic,
             initialNotes = defaultNotes,
             sourceEntryId = noteId,
-            onConfirm = { topic, notes ->
-                scope.launch {
-                    val existing = store.findReviewRecordBySource(notebookId, noteId)
-                    if (existing != null) {
-                        message = context.getString(R.string.already_in_review)
-                    } else {
-                        val record = store.insertReviewRecord(
-                            notebookId = notebookId,
-                            topic = topic,
-                            notes = notes,
-                            sourceEntryId = noteId,
-                        )
-                        message = if (record != null) context.getString(R.string.added_to_review) else context.getString(R.string.already_in_review)
+            onSave = { topic, notes ->
+                val result = store.insertReviewRecord(
+                    notebookId = notebookId,
+                    topic = topic,
+                    notes = notes,
+                    sourceEntryId = noteId,
+                )
+                when (result) {
+                    is com.feiyu.notes.data.ReviewInsertResult.Success -> {
+                        message = context.getString(R.string.added_to_review)
+                        null
                     }
+                    is com.feiyu.notes.data.ReviewInsertResult.AlreadyExists -> context.getString(R.string.already_in_review)
+                    is com.feiyu.notes.data.ReviewInsertResult.SourceNotFound -> context.getString(R.string.source_not_found)
+                    is com.feiyu.notes.data.ReviewInsertResult.InvalidCourse -> context.getString(R.string.save_failed)
+                    is com.feiyu.notes.data.ReviewInsertResult.Failed -> context.getString(R.string.save_failed)
                 }
             },
             onDismiss = { addingToReview = false },

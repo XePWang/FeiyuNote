@@ -268,8 +268,8 @@ class NotebookStoreTest {
     @Test fun reviewRecordsIsolatedByCourseNotebook() = runBlocking {
         val courseA = store.createNotebook(NotebookKind.COURSE, "Course A")!!
         val courseB = store.createNotebook(NotebookKind.COURSE, "Course B")!!
-        val recordA = store.insertReviewRecord(courseA.id, "Topic A", "Notes A")!!
-        val recordB = store.insertReviewRecord(courseB.id, "Topic B", "Notes B")!!
+        val recordA = store.addReviewRecord(courseA.id, "Topic A", "Notes A")!!
+        val recordB = store.addReviewRecord(courseB.id, "Topic B", "Notes B")!!
 
         val listA = store.listReviewRecords(courseA.id)
         val listB = store.listReviewRecords(courseB.id)
@@ -280,6 +280,32 @@ class NotebookStoreTest {
         assertEquals(recordB.id, listB[0].id)
     }
 
+    @Test fun reviewRecordCrossCourseSecurityEnforced() = runBlocking {
+        val courseA = store.createNotebook(NotebookKind.COURSE, "Course A")!!
+        val courseB = store.createNotebook(NotebookKind.COURSE, "Course B")!!
+        val practice = store.createNotebook(NotebookKind.PRACTICE, "Practice")!!
+        val recordB = store.addReviewRecord(courseB.id, "Topic B", "Notes B")!!
+
+        // Course A context attempts to read, update, change status, or delete Course B's record
+        assertNull(store.getReviewRecord(courseA.id, recordB.id))
+        assertFalse(store.updateReviewRecord(courseA.id, recordB.id, "Hacked Topic", "Hacked Notes"))
+        assertFalse(store.setReviewStatus(courseA.id, recordB.id, ReviewStatus.UNDERSTOOD))
+        assertFalse(store.deleteReviewRecord(courseA.id, recordB.id))
+
+        // Practice notebook context attempts the same operations
+        assertNull(store.getReviewRecord(practice.id, recordB.id))
+        assertFalse(store.updateReviewRecord(practice.id, recordB.id, "Hacked Topic", "Hacked Notes"))
+        assertFalse(store.setReviewStatus(practice.id, recordB.id, ReviewStatus.UNDERSTOOD))
+        assertFalse(store.deleteReviewRecord(practice.id, recordB.id))
+
+        // Verify Course B's record remains completely untouched
+        val verifyB = store.getReviewRecord(courseB.id, recordB.id)!!
+        assertEquals("Topic B", verifyB.topic)
+        assertEquals("Notes B", verifyB.notes)
+        assertEquals(ReviewStatus.PENDING, verifyB.status)
+        assertFalse(verifyB.sourceDeleted)
+    }
+
     @Test fun reviewRecordRejectsCrossCourseSourceEntry() = runBlocking {
         val courseA = store.createNotebook(NotebookKind.COURSE, "Course A")!!
         val courseB = store.createNotebook(NotebookKind.COURSE, "Course B")!!
@@ -287,17 +313,17 @@ class NotebookStoreTest {
         val (qB, _) = ask(lessonB.id, "Question in B")
 
         val result = store.insertReviewRecord(courseA.id, "Topic", "Notes", sourceEntryId = qB.id)
-        assertNull(result)
+        assertTrue(result is ReviewInsertResult.SourceNotFound)
         assertTrue(store.listReviewRecords(courseA.id).isEmpty())
     }
 
     @Test fun reviewRecordRejectsNonCourseNotebook() = runBlocking {
         val practice = store.createNotebook(NotebookKind.PRACTICE, "Practice")!!
         val resultPractice = store.insertReviewRecord(practice.id, "Topic", "Notes")
-        assertNull(resultPractice)
+        assertTrue(resultPractice is ReviewInsertResult.InvalidCourse)
 
         val resultGeneral = store.insertReviewRecord(NotebookStore.GENERAL_ID, "Topic", "Notes")
-        assertNull(resultGeneral)
+        assertTrue(resultGeneral is ReviewInsertResult.InvalidCourse)
     }
 
     @Test fun reviewRecordCrudAndReopen() = runBlocking {
@@ -305,14 +331,14 @@ class NotebookStoreTest {
         val lesson = store.createLesson(course.id, "Calculus")!!
         val (q, _) = ask(lesson.id, "Limit definition")
 
-        val record = store.insertReviewRecord(course.id, "Limits", "Review eps-delta", sourceEntryId = q.id)!!
+        val record = store.addReviewRecord(course.id, "Limits", "Review eps-delta", sourceEntryId = q.id)!!
         assertEquals(ReviewStatus.PENDING, record.status)
         assertFalse(record.sourceDeleted)
         assertEquals(q.id, record.sourceEntryId)
 
         reopen()
 
-        val fetched = store.getReviewRecord(record.id)!!
+        val fetched = store.getReviewRecord(course.id, record.id)!!
         assertEquals(record.id, fetched.id)
         assertEquals(course.id, fetched.notebookId)
         assertEquals("Limits", fetched.topic)
@@ -320,25 +346,25 @@ class NotebookStoreTest {
         assertEquals(ReviewStatus.PENDING, fetched.status)
         assertFalse(fetched.sourceDeleted)
 
-        assertTrue(store.updateReviewRecord(record.id, "Limits updated", "Updated notes"))
-        val updated = store.getReviewRecord(record.id)!!
+        assertTrue(store.updateReviewRecord(course.id, record.id, "Limits updated", "Updated notes"))
+        val updated = store.getReviewRecord(course.id, record.id)!!
         assertEquals("Limits updated", updated.topic)
         assertEquals("Updated notes", updated.notes)
         assertTrue(updated.updatedAt >= updated.createdAt)
 
-        assertTrue(store.setReviewStatus(record.id, ReviewStatus.UNDERSTOOD))
-        val understood = store.getReviewRecord(record.id)!!
+        assertTrue(store.setReviewStatus(course.id, record.id, ReviewStatus.UNDERSTOOD))
+        val understood = store.getReviewRecord(course.id, record.id)!!
         assertEquals(ReviewStatus.UNDERSTOOD, understood.status)
 
-        assertTrue(store.setReviewStatus(record.id, ReviewStatus.CONFUSED))
-        val confused = store.getReviewRecord(record.id)!!
+        assertTrue(store.setReviewStatus(course.id, record.id, ReviewStatus.CONFUSED))
+        val confused = store.getReviewRecord(course.id, record.id)!!
         assertEquals(ReviewStatus.CONFUSED, confused.status)
 
         reopen()
-        assertEquals(ReviewStatus.CONFUSED, store.getReviewRecord(record.id)!!.status)
+        assertEquals(ReviewStatus.CONFUSED, store.getReviewRecord(course.id, record.id)!!.status)
 
-        assertTrue(store.deleteReviewRecord(record.id))
-        assertNull(store.getReviewRecord(record.id))
+        assertTrue(store.deleteReviewRecord(course.id, record.id))
+        assertNull(store.getReviewRecord(course.id, record.id))
         assertTrue(store.listReviewRecords(course.id).isEmpty())
     }
 
@@ -347,24 +373,29 @@ class NotebookStoreTest {
         val lesson = store.createLesson(course.id, "Calculus")!!
         val (q, _) = ask(lesson.id, "Derivative rules")
 
-        val first = store.insertReviewRecord(course.id, "Derivatives", "Product rule", sourceEntryId = q.id)!!
-        val second = store.insertReviewRecord(course.id, "Derivatives 2", "Another note", sourceEntryId = q.id)!!
+        val first = store.insertReviewRecord(course.id, "Derivatives", "Product rule", sourceEntryId = q.id)
+        assertTrue(first is ReviewInsertResult.Success)
+        val firstRecord = (first as ReviewInsertResult.Success).record
 
-        assertEquals(first.id, second.id)
+        val second = store.insertReviewRecord(course.id, "Derivatives 2", "Another note", sourceEntryId = q.id)
+        assertTrue(second is ReviewInsertResult.AlreadyExists)
+        val secondRecord = (second as ReviewInsertResult.AlreadyExists).existingRecord
+
+        assertEquals(firstRecord.id, secondRecord.id)
         assertEquals(1, store.listReviewRecords(course.id).size)
 
         val bySource = store.findReviewRecordBySource(course.id, q.id)
         assertNotNull(bySource)
-        assertEquals(first.id, bySource!!.id)
+        assertEquals(firstRecord.id, bySource!!.id)
     }
 
     @Test fun reviewRecordsCascadeOnNotebookDeletion() = runBlocking {
         val course = store.createNotebook(NotebookKind.COURSE, "Math")!!
-        val record = store.insertReviewRecord(course.id, "Limits", "Notes")!!
-        assertNotNull(store.getReviewRecord(record.id))
+        val record = store.addReviewRecord(course.id, "Limits", "Notes")!!
+        assertNotNull(store.getReviewRecord(course.id, record.id))
 
         assertTrue(store.deleteNotebook(course.id))
-        assertNull(store.getReviewRecord(record.id))
+        assertNull(store.getReviewRecord(course.id, record.id))
         assertTrue(store.listReviewRecords(course.id).isEmpty())
     }
 
@@ -375,25 +406,25 @@ class NotebookStoreTest {
         val (q1, a1) = ask(lesson1.id, "Newton's laws")
         val (q2, a2) = ask(lesson2.id, "Refraction")
 
-        val record1 = store.insertReviewRecord(course.id, "Newton", "Law 1", sourceEntryId = a1.id)!!
-        val record2 = store.insertReviewRecord(course.id, "Optics", "Snell's Law", sourceEntryId = a2.id)!!
+        val record1 = store.addReviewRecord(course.id, "Newton", "Law 1", sourceEntryId = a1.id)!!
+        val record2 = store.addReviewRecord(course.id, "Optics", "Snell's Law", sourceEntryId = a2.id)!!
 
-        assertFalse(store.getReviewRecord(record1.id)!!.sourceDeleted)
-        assertFalse(store.getReviewRecord(record2.id)!!.sourceDeleted)
+        assertFalse(store.getReviewRecord(course.id, record1.id)!!.sourceDeleted)
+        assertFalse(store.getReviewRecord(course.id, record2.id)!!.sourceDeleted)
 
         assertTrue(store.deleteThread(q1.id))
-        val rec1AfterThreadDel = store.getReviewRecord(record1.id)!!
+        val rec1AfterThreadDel = store.getReviewRecord(course.id, record1.id)!!
         assertTrue(rec1AfterThreadDel.sourceDeleted)
         assertEquals(a1.id, rec1AfterThreadDel.sourceEntryId)
-        assertFalse(store.getReviewRecord(record2.id)!!.sourceDeleted)
+        assertFalse(store.getReviewRecord(course.id, record2.id)!!.sourceDeleted)
 
         assertTrue(store.deleteLesson(lesson2.id))
-        val rec2AfterLessonDel = store.getReviewRecord(record2.id)!!
+        val rec2AfterLessonDel = store.getReviewRecord(course.id, record2.id)!!
         assertTrue(rec2AfterLessonDel.sourceDeleted)
         assertEquals(a2.id, rec2AfterLessonDel.sourceEntryId)
     }
 
-    @Test fun v3ToV4MigrationPreservesDataAndAllowsReviewRecords() = runBlocking {
+    @Test fun upgradesFromV1ToV4PreservesDataAndAddsReviewTable() = runBlocking {
         database.close()
         val legacy = context.openOrCreateDatabase(dbName, 0, null)
         val schema = InstrumentationRegistry.getInstrumentation().context.assets.open("notes-v1.sql").bufferedReader().use { it.readText() }
@@ -411,7 +442,68 @@ class NotebookStoreTest {
         assertEquals(1, existingEntries.size)
         assertEquals("Existing Q", existingEntries[0].text)
 
-        val rec = store.insertReviewRecord(1, "Migrated Review", "Works after migration", sourceEntryId = 3)
+        val rec = store.addReviewRecord(1, "Migrated Review", "Works after migration", sourceEntryId = 3)
+        assertNotNull(rec)
+        assertEquals(1, store.listReviewRecords(1).size)
+    }
+
+    @Test fun upgradesFromV2ToV4PreservesDataAndSeedsTemplatesAndAddsReviewTable() = runBlocking {
+        database.close()
+        val legacy = context.openOrCreateDatabase(dbName, 0, null)
+        val schema = InstrumentationRegistry.getInstrumentation().context.assets.open("notes-v2.sql").bufferedReader().use { it.readText() }
+        schema.split(';').filter { it.isNotBlank() }.forEach { legacy.execSQL(it) }
+        legacy.execSQL("INSERT INTO templates (id,name,instruction,created_at) VALUES (10,'User Template','Explain nicely',1)")
+        legacy.execSQL("INSERT INTO notebooks (id,kind,name,default_template_id,created_at) VALUES (1,'course','V2 Course',10,1)")
+        legacy.execSQL("INSERT INTO lessons (id,notebook_id,title,created_at) VALUES (2,1,'V2 Lesson',1)")
+        legacy.execSQL("INSERT INTO entries (id,lesson_id,kind,action,text,image_paths,created_at) VALUES (3,2,'user','ask','V2 Question','[]',1)")
+        legacy.version = 2
+        legacy.close()
+
+        open()
+        assertEquals(NotebookDatabase.VERSION, database.readableDatabase.version)
+
+        // V2 -> V3 migration adds templates.source and seeds guided template
+        val templates = store.listTemplates()
+        assertEquals(2, templates.size)
+        assertTrue(templates.any { it.name == "User Template" && it.source == null })
+        assertTrue(templates.any { it.source == Template.BUILTIN_GUIDED })
+
+        val entries = store.readEntries(2)
+        assertEquals(1, entries.size)
+        assertEquals("V2 Question", entries[0].text)
+
+        val rec = store.addReviewRecord(1, "V2 Review", "Works on migrated V2", sourceEntryId = 3)
+        assertNotNull(rec)
+        assertEquals(1, store.listReviewRecords(1).size)
+    }
+
+    @Test fun upgradesFromV3ToV4PreservesExistingTemplatesWithoutReseeding() = runBlocking {
+        database.close()
+        val legacy = context.openOrCreateDatabase(dbName, 0, null)
+        val schema = InstrumentationRegistry.getInstrumentation().context.assets.open("notes-v3.sql").bufferedReader().use { it.readText() }
+        schema.split(';').filter { it.isNotBlank() }.forEach { legacy.execSQL(it) }
+        // User already customized their templates in V3:
+        legacy.execSQL("INSERT INTO templates (id,name,instruction,created_at,source) VALUES (1,'My Custom Guided','Be strict',1,'builtin:guided')")
+        legacy.execSQL("INSERT INTO templates (id,name,instruction,created_at,source) VALUES (2,'Imported Skill','LaTeX only',2,'https://example.com/skill.md')")
+        legacy.execSQL("INSERT INTO notebooks (id,kind,name,created_at) VALUES (1,'course','V3 Course',1)")
+        legacy.execSQL("INSERT INTO lessons (id,notebook_id,title,created_at) VALUES (2,1,'V3 Lesson',1)")
+        legacy.execSQL("INSERT INTO entries (id,lesson_id,kind,action,text,image_paths,created_at) VALUES (3,2,'user','ask','V3 Question','[]',1)")
+        legacy.version = 3
+        legacy.close()
+
+        open()
+        assertEquals(NotebookDatabase.VERSION, database.readableDatabase.version)
+
+        // Crucial verification: V3 -> V4 MUST NOT re-seed builtin templates
+        val templates = store.listTemplates()
+        assertEquals(2, templates.size)
+        assertEquals(setOf("My Custom Guided", "Imported Skill"), templates.map { it.name }.toSet())
+
+        val entries = store.readEntries(2)
+        assertEquals(1, entries.size)
+        assertEquals("V3 Question", entries[0].text)
+
+        val rec = store.addReviewRecord(1, "V3 Review", "Works on migrated V3", sourceEntryId = 3)
         assertNotNull(rec)
         assertEquals(1, store.listReviewRecords(1).size)
     }

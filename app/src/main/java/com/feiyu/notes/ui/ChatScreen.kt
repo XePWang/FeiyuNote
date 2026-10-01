@@ -210,7 +210,7 @@ fun ChatScreen(
             initialTopic = defaultTopic,
             initialNotes = defaultNotes,
             sourceEntryId = entry.id,
-            onConfirm = { topic, notes ->
+            onSave = { topic, notes ->
                 vm.addToReview(entry.id, topic, notes)
             },
             onDismiss = { reviewingEntry = null },

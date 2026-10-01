@@ -77,4 +77,18 @@ class ReviewRecordModelTest {
         assertTrue(invalidatedSource.sourceDeleted)
         assertEquals(100L, invalidatedSource.sourceEntryId)
     }
+
+    @Test
+    fun reviewInsertResultCarriesExpectedData() {
+        val record = ReviewRecord(1L, 10L, "Topic", "Notes")
+        val success = ReviewInsertResult.Success(record)
+        assertEquals(record, success.record)
+
+        val existing = ReviewInsertResult.AlreadyExists(record)
+        assertEquals(record, existing.existingRecord)
+
+        assertTrue(ReviewInsertResult.SourceNotFound is ReviewInsertResult)
+        assertTrue(ReviewInsertResult.InvalidCourse is ReviewInsertResult)
+        assertTrue(ReviewInsertResult.Failed is ReviewInsertResult)
+    }
 }

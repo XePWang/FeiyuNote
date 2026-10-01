@@ -90,3 +90,11 @@ data class ReviewRecord(
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
 )
+
+sealed interface ReviewInsertResult {
+    data class Success(val record: ReviewRecord) : ReviewInsertResult
+    data class AlreadyExists(val existingRecord: ReviewRecord) : ReviewInsertResult
+    data object SourceNotFound : ReviewInsertResult
+    data object InvalidCourse : ReviewInsertResult
+    data object Failed : ReviewInsertResult
+}

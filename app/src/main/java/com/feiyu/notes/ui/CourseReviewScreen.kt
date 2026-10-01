@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.feiyu.notes.R
 import com.feiyu.notes.data.NotebookStore
+import com.feiyu.notes.data.ReviewInsertResult
 import com.feiyu.notes.data.ReviewRecord
 import com.feiyu.notes.data.ReviewStatus
 import kotlinx.coroutines.launch
@@ -154,7 +155,12 @@ fun CourseReviewScreen(
                         ReviewRecordCard(
                             record = record,
                             onStatusChange = { newStatus ->
-                                scope.launch { store.setReviewStatus(notebookId, record.id, newStatus) }
+                                scope.launch {
+                                    val ok = store.setReviewStatus(notebookId, record.id, newStatus)
+                                    if (!ok) {
+                                        notice = context.getString(R.string.save_failed)
+                                    }
+                                }
                             },
                             onEdit = { editingRecord = record },
                             onDelete = { deletingId = record.id },
@@ -182,19 +188,12 @@ fun CourseReviewScreen(
             initialTopic = "",
             initialNotes = "",
             sourceEntryId = null,
-            onConfirm = { topic, notes ->
-                scope.launch {
-                    store.insertReviewRecord(
-                        ReviewRecord(
-                            id = 0,
-                            notebookId = notebookId,
-                            topic = topic,
-                            notes = notes,
-                            sourceEntryId = null,
-                            sourceDeleted = false,
-                            status = ReviewStatus.PENDING,
-                        )
-                    )
+            onSave = { topic, notes ->
+                when (val res = store.insertReviewRecord(notebookId, topic, notes)) {
+                    is ReviewInsertResult.Success -> null
+                    is ReviewInsertResult.AlreadyExists -> context.getString(R.string.already_in_review)
+                    is ReviewInsertResult.SourceNotFound -> context.getString(R.string.source_not_found)
+                    else -> context.getString(R.string.save_failed)
                 }
             },
             onDismiss = { addingRecord = false },
@@ -207,10 +206,9 @@ fun CourseReviewScreen(
             initialTopic = record.topic,
             initialNotes = record.notes,
             sourceEntryId = record.sourceEntryId,
-            onConfirm = { topic, notes ->
-                scope.launch {
-                    store.updateReviewRecord(notebookId, record.id, topic, notes)
-                }
+            onSave = { topic, notes ->
+                val ok = store.updateReviewRecord(notebookId, record.id, topic, notes)
+                if (ok) null else context.getString(R.string.save_failed)
             },
             onDismiss = { editingRecord = null },
         )
@@ -220,7 +218,15 @@ fun CourseReviewScreen(
         ConfirmDialog(
             title = context.getString(R.string.delete_review_record),
             text = context.getString(R.string.delete_review_confirm),
-            onConfirm = { scope.launch { store.deleteReviewRecord(notebookId, id) } },
+            onConfirm = {
+                scope.launch {
+                    val ok = store.deleteReviewRecord(notebookId, id)
+                    if (!ok) {
+                        notice = context.getString(R.string.delete_failed)
+                    }
+                    deletingId = null
+                }
+            },
             onDismiss = { deletingId = null },
         )
     }
@@ -356,15 +362,20 @@ fun ReviewRecordEditDialog(
     initialTopic: String,
     initialNotes: String,
     sourceEntryId: Long?,
-    onConfirm: (topic: String, notes: String) -> Unit,
+    onSave: suspend (topic: String, notes: String) -> String?,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var topic by rememberSaveable { mutableStateOf(initialTopic) }
     var notes by rememberSaveable { mutableStateOf(initialNotes) }
+    var saving by rememberSaveable { mutableStateOf(false) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val canSave = !saving && topic.isNotBlank()
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -377,33 +388,67 @@ fun ReviewRecordEditDialog(
                 }
                 OutlinedTextField(
                     value = topic,
-                    onValueChange = { topic = it },
+                    onValueChange = {
+                        topic = it
+                        errorMessage = null
+                    },
                     label = { Text(context.getString(R.string.review_topic)) },
                     singleLine = true,
+                    enabled = !saving,
+                    isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth().testTag("review-topic-input"),
                 )
                 OutlinedTextField(
                     value = notes,
-                    onValueChange = { notes = it },
+                    onValueChange = {
+                        notes = it
+                        errorMessage = null
+                    },
                     label = { Text(context.getString(R.string.review_notes)) },
                     minLines = 3,
+                    enabled = !saving,
                     modifier = Modifier.fillMaxWidth().testTag("review-notes-input"),
                 )
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("review-error-message"),
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = topic.isNotBlank(),
+                enabled = canSave,
                 onClick = {
-                    onConfirm(topic.trim(), notes.trim())
-                    onDismiss()
+                    scope.launch {
+                        saving = true
+                        errorMessage = null
+                        try {
+                            val err = onSave(topic.trim(), notes.trim())
+                            if (err != null) {
+                                errorMessage = err
+                            } else {
+                                onDismiss()
+                            }
+                        } catch (e: Exception) {
+                            errorMessage = context.getString(R.string.save_failed)
+                        } finally {
+                            saving = false
+                        }
+                    }
                 },
             ) {
-                Text(context.getString(R.string.save))
+                Text(context.getString(if (saving) R.string.saving else R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                enabled = !saving,
+                onClick = onDismiss,
+            ) {
                 Text(context.getString(R.string.cancel))
             }
         },

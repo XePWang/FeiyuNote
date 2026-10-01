@@ -327,63 +327,91 @@ class NotebookStore(
 
     // ---- review records (spec §12 / course review) ----
 
+    // ---- review records ----
+
     suspend fun listReviewRecords(notebookId: Long): List<ReviewRecord> = read {
+        if (!isCourseNotebook(notebookId)) return@read emptyList()
         query("SELECT * FROM review_records WHERE notebook_id = ? ORDER BY created_at DESC, id DESC", notebookId) {
             it.toReviewRecord()
         }
     }
 
     suspend fun getReviewRecord(notebookId: Long, recordId: Long): ReviewRecord? = read {
+        if (!isCourseNotebook(notebookId)) return@read null
         query("SELECT * FROM review_records WHERE id = ? AND notebook_id = ?", recordId, notebookId) {
             it.toReviewRecord()
         }.firstOrNull()
     }
 
     suspend fun findReviewRecordBySource(notebookId: Long, sourceEntryId: Long): ReviewRecord? = read {
+        if (!isCourseNotebook(notebookId)) return@read null
         query(
             "SELECT * FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0 LIMIT 1",
             notebookId, sourceEntryId
         ) { it.toReviewRecord() }.firstOrNull()
     }
 
-    suspend fun insertReviewRecord(record: ReviewRecord): Long? = write {
-        // 1. Strict notebook boundary: must be an existing COURSE notebook
-        val kind = query("SELECT kind FROM notebooks WHERE id = ?", record.notebookId) {
-            enumOf<NotebookKind>(it.getString(0))
-        }.firstOrNull()
-        if (kind != NotebookKind.COURSE) return@write null
+    suspend fun insertReviewRecord(
+        notebookId: Long,
+        topic: String,
+        notes: String,
+        sourceEntryId: Long? = null,
+        status: ReviewStatus = ReviewStatus.PENDING,
+    ): ReviewInsertResult = write {
+        if (!isCourseNotebook(notebookId)) return@write ReviewInsertResult.InvalidCourse
 
-        // 2. Source entry validation: if provided, must exist and belong to the same notebook
-        if (record.sourceEntryId != null) {
+        if (sourceEntryId != null) {
             val sourceNotebookId = query(
                 """
                 SELECT l.notebook_id FROM entries e JOIN lessons l ON e.lesson_id = l.id
                 WHERE e.id = ?
                 """,
-                record.sourceEntryId
+                sourceEntryId
             ) { it.getLong(0) }.firstOrNull()
-            if (sourceNotebookId != record.notebookId) return@write null
+            if (sourceNotebookId == null || sourceNotebookId != notebookId) {
+                return@write ReviewInsertResult.SourceNotFound
+            }
 
-            // 3. Prevent duplicate insertion for the same active source entry in this notebook
-            val existingId = query(
-                "SELECT id FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0",
-                record.notebookId, record.sourceEntryId
-            ) { it.getLong(0) }.firstOrNull()
-            if (existingId != null) return@write existingId
+            val existing = query(
+                "SELECT * FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0",
+                notebookId, sourceEntryId
+            ) { it.toReviewRecord() }.firstOrNull()
+            if (existing != null) {
+                return@write ReviewInsertResult.AlreadyExists(existing)
+            }
         }
 
         val now = clock()
         val values = ContentValues().apply {
-            put("notebook_id", record.notebookId)
-            put("topic", record.topic.trim())
-            put("notes", record.notes.trim())
-            put("source_entry_id", record.sourceEntryId)
-            put("source_deleted", if (record.sourceDeleted) 1 else 0)
-            put("status", record.status.db)
-            put("created_at", if (record.createdAt > 0) record.createdAt else now)
-            put("updated_at", if (record.updatedAt > 0) record.updatedAt else now)
+            put("notebook_id", notebookId)
+            put("topic", topic.trim())
+            put("notes", notes.trim())
+            put("source_entry_id", sourceEntryId)
+            put("source_deleted", 0)
+            put("status", status.db)
+            put("created_at", now)
+            put("updated_at", now)
         }
-        db.insert("review_records", null, values)
+        val id = db.insert("review_records", null, values)
+        if (id == -1L) return@write ReviewInsertResult.Failed
+
+        val record = query("SELECT * FROM review_records WHERE id = ? AND notebook_id = ?", id, notebookId) {
+            it.toReviewRecord()
+        }.firstOrNull() ?: return@write ReviewInsertResult.Failed
+
+        ReviewInsertResult.Success(record)
+    }
+
+    suspend fun addReviewRecord(
+        notebookId: Long,
+        topic: String,
+        notes: String,
+        sourceEntryId: Long? = null,
+        status: ReviewStatus = ReviewStatus.PENDING,
+    ): ReviewRecord? = when (val res = insertReviewRecord(notebookId, topic, notes, sourceEntryId, status)) {
+        is ReviewInsertResult.Success -> res.record
+        is ReviewInsertResult.AlreadyExists -> res.existingRecord
+        else -> null
     }
 
     suspend fun updateReviewRecord(
@@ -393,6 +421,7 @@ class NotebookStore(
         notes: String,
         status: ReviewStatus? = null,
     ): Boolean = write {
+        if (!isCourseNotebook(notebookId)) return@write false
         val now = clock()
         val values = ContentValues().apply {
             put("topic", topic.trim())
@@ -408,6 +437,7 @@ class NotebookStore(
         recordId: Long,
         status: ReviewStatus,
     ): Boolean = write {
+        if (!isCourseNotebook(notebookId)) return@write false
         val now = clock()
         val values = ContentValues().apply {
             put("status", status.db)
@@ -417,67 +447,14 @@ class NotebookStore(
     }
 
     suspend fun deleteReviewRecord(notebookId: Long, recordId: Long): Boolean = write {
+        if (!isCourseNotebook(notebookId)) return@write false
         db.delete("review_records", "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
     }
 
-    suspend fun getReviewRecord(recordId: Long): ReviewRecord? = read {
-        query("SELECT * FROM review_records WHERE id = ?", recordId) {
-            it.toReviewRecord()
-        }.firstOrNull()
-    }
-
-    suspend fun insertReviewRecord(
-        notebookId: Long,
-        topic: String,
-        notes: String,
-        sourceEntryId: Long? = null,
-        status: ReviewStatus = ReviewStatus.PENDING,
-    ): ReviewRecord? {
-        val record = ReviewRecord(
-            id = 0,
-            notebookId = notebookId,
-            topic = topic,
-            notes = notes,
-            sourceEntryId = sourceEntryId,
-            status = status,
-        )
-        val id = insertReviewRecord(record) ?: return null
-        return getReviewRecord(notebookId, id)
-    }
-
-    suspend fun updateReviewRecord(
-        recordId: Long,
-        topic: String,
-        notes: String,
-        status: ReviewStatus? = null,
-    ): Boolean = write {
-        val now = clock()
-        val values = ContentValues().apply {
-            put("topic", topic.trim())
-            put("notes", notes.trim())
-            if (status != null) put("status", status.db)
-            put("updated_at", now)
-        }
-        db.update("review_records", values, "id = ?", args(recordId)) == 1
-    }
-
-    suspend fun setReviewStatus(
-        recordId: Long,
-        status: ReviewStatus,
-    ): Boolean = write {
-        val now = clock()
-        val values = ContentValues().apply {
-            put("status", status.db)
-            put("updated_at", now)
-        }
-        db.update("review_records", values, "id = ?", args(recordId)) == 1
-    }
-
-    suspend fun deleteReviewRecord(recordId: Long): Boolean = write {
-        db.delete("review_records", "id = ?", args(recordId)) == 1
-    }
-
     // ---- helpers ----
+
+    private fun SQLiteDatabase.isCourseNotebook(notebookId: Long): Boolean =
+        count("SELECT COUNT(*) FROM notebooks WHERE id = ? AND kind = 'course'", notebookId) == 1L
 
     private fun SQLiteDatabase.validLink(kind: NotebookKind, linkedCourseId: Long?, selfId: Long?): Boolean {
         if (linkedCourseId == null) return true
