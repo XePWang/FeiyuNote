@@ -112,7 +112,7 @@ if ($Full) {
     Invoke-Step 'UI screenshots' {
         $screenshots = Join-Path $logDir 'screenshots'
         New-Item -ItemType Directory -Force $screenshots | Out-Null
-        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone', 'multi-photo-phone')) {
+        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone', 'multi-photo-phone', 'support-phone')) {
             & $adb -s $Serial pull "/sdcard/Android/data/com.feiyu.notes/files/ui-evidence/$name.png" (Join-Path $screenshots "$name.png")
             if ($LASTEXITCODE -ne 0) { throw "Missing UI screenshot: $name" }
         }

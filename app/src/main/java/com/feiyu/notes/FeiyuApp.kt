@@ -18,6 +18,10 @@ import com.feiyu.notes.support.DeviceInfo
 import com.feiyu.notes.support.DiagnosticOperation
 import com.feiyu.notes.support.DiagnosticResult
 import com.feiyu.notes.support.Diagnostics
+import com.feiyu.notes.support.FeedbackClient
+import com.feiyu.notes.support.FeedbackDraftStore
+import com.feiyu.notes.support.FeedbackResult
+import com.feiyu.notes.support.UpdateResult
 import com.feiyu.notes.support.UpdateClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +53,11 @@ class FeiyuApp : Application() {
         private set
     lateinit var diagnostics: Diagnostics
         private set
+    lateinit var feedbackDrafts: FeedbackDraftStore
+        private set
+    /** Network entry points of the help screen; UI tests replace them with fakes. */
+    var submitFeedback: suspend (String) -> FeedbackResult = { FeedbackClient().submit(it) }
+    var checkUpdate: suspend (Long, Int, String) -> UpdateResult = { installed, sdk, language -> UpdateClient().check(installed, sdk, language) }
 
     override fun onCreate() {
         super.onCreate()
@@ -60,6 +69,8 @@ class FeiyuApp : Application() {
 
     private fun installProduction() {
         apiSettings = ApiSettings(this)
+        submitFeedback = { FeedbackClient().submit(it) }
+        checkUpdate = { installed, sdk, language -> UpdateClient().check(installed, sdk, language) }
         install(
             filesRoot = filesDir,
             databaseName = NotebookDatabase.NAME,
@@ -100,6 +111,7 @@ class FeiyuApp : Application() {
             AppInfo(packageManager.getPackageInfo(packageName, 0).versionName.orEmpty(), UpdateClient.installedVersionCode(this)),
             DeviceInfo(android.os.Build.MANUFACTURER, android.os.Build.MODEL, android.os.Build.VERSION.SDK_INT),
         )
+        feedbackDrafts = FeedbackDraftStore(File(filesRoot, "support/feedback-draft.json"))
         avatars = com.feiyu.notes.settings.AvatarFiles(filesRoot)
         welcomeImage = com.feiyu.notes.settings.AvatarFiles(filesRoot, "welcome.png")
         chatImage = com.feiyu.notes.settings.AvatarFiles(filesRoot, "chat.png")

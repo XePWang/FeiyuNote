@@ -41,6 +41,10 @@ import com.feiyu.notes.ai.AiConfig
 import com.feiyu.notes.ai.AiInput
 import com.feiyu.notes.ai.AiReply
 import com.feiyu.notes.data.EntryKind
+import com.feiyu.notes.support.FeedbackFailure
+import com.feiyu.notes.support.FeedbackResult
+import com.feiyu.notes.support.UpdateResult
+import androidx.compose.ui.test.assertIsOn
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -470,6 +474,81 @@ class UiFlowTest {
         assertTrue(inputs.last().systemText.startsWith("自定义公共提示"))
         app.prefs.setPrompt(com.feiyu.notes.study.PromptKind.GENERAL, null)
         assertEquals(com.feiyu.notes.study.PromptKind.GENERAL.default, app.prefs.prompt(com.feiyu.notes.study.PromptKind.GENERAL))
+    }
+
+    @Test fun helpScreenChecksUpdatesAndRetriesFeedbackWithTheSameIdAcrossRecreation() {
+        val bodies = Collections.synchronizedList(mutableListOf<String>())
+        val reportId = java.util.UUID.randomUUID().toString()
+        app.submitFeedback = { body ->
+            bodies += body
+            if (bodies.size == 1) FeedbackResult.Failed(FeedbackFailure.UNCONFIRMED) else FeedbackResult.Received(reportId)
+        }
+        app.checkUpdate = { _, _, _ -> UpdateResult.Available("9.9.9", "更新说明示例", "https://feiyunote.cangming.fyi/feiyu/") }
+        openSupport()
+        waitText("QQ 群：1079399140")
+        compose.onNodeWithTag("check-update").performScrollTo().performClick()
+        waitText("发现新版本 9.9.9")
+        waitText("更新说明示例")
+
+        compose.onNodeWithTag("feedback-description").performScrollTo().performTextInput("合成问题描述")
+        hideKeyboard()
+        compose.onNodeWithTag("preview-feedback").performScrollTo().performClick()
+        waitText("不附带诊断信息")
+        compose.onNodeWithTag("submit-feedback").performClick()
+        waitText("发送结果未确认，服务器可能已经收到。草稿已保留，重新提交不会重复建单。")
+
+        // The frozen submission survives activity recreation; retrying resends it unchanged.
+        scenario!!.recreate()
+        waitText("重新提交")
+        compose.onNodeWithTag("feedback-description").assert(hasText("合成问题描述"))
+        compose.onNodeWithTag("preview-feedback").performScrollTo().performClick()
+        compose.onNodeWithTag("submit-feedback").performClick()
+        waitText("已收到，反馈编号：$reportId")
+        assertEquals(2, bodies.size)
+        assertEquals(bodies[0], bodies[1])
+        assertTrue(bodies[0].contains("\"diagnostics\":null"))
+        assertEquals(com.feiyu.notes.support.FeedbackDraft(), app.feedbackDrafts.load())
+        screenshot("support-phone")
+    }
+
+    @Test fun crashPromptOpensFeedbackWithDiagnosticsOnceAndShareHandsOff() {
+        val bodies = Collections.synchronizedList(mutableListOf<String>())
+        app.submitFeedback = { bodies += it; FeedbackResult.Received(java.util.UUID.randomUUID().toString()) }
+        assertTrue(app.diagnostics.recordCrash(IllegalStateException("synthetic secret sk-test")))
+        scenario!!.close()
+        launch()
+        waitText("上次运行遇到问题")
+        compose.onNodeWithTag("crash-review").performClick()
+        waitText("关于与帮助")
+        compose.onNodeWithTag("attach-diagnostics").assertIsOn()
+        compose.onNodeWithTag("feedback-description").performScrollTo().performTextInput("崩溃了")
+        hideKeyboard()
+        compose.onNodeWithTag("preview-feedback").performScrollTo().performClick()
+        waitSubstring("java.lang.IllegalStateException")
+
+        intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
+        compose.onNodeWithTag("share-feedback").performScrollTo().performClick()
+        waitText("已交给其他应用，是否发出请在该应用中确认。")
+        intended(hasAction(Intent.ACTION_CHOOSER))
+        compose.onNodeWithTag("submit-feedback").performClick()
+        waitSubstring("已收到，反馈编号：")
+        assertTrue(bodies.single().contains("java.lang.IllegalStateException"))
+        assertTrue(!bodies.single().contains("sk-test"))
+
+        // Reviewed once: the next start does not prompt again.
+        scenario!!.close()
+        launch()
+        waitText("一起来聊天吧")
+        assertTrue(compose.onAllNodesWithText("上次运行遇到问题").fetchSemanticsNodes().isEmpty())
+    }
+
+    private fun waitSubstring(text: String) =
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun openSupport() {
+        click("设置")
+        compose.onNodeWithTag("open-support").performScrollTo().performClick()
+        waitText("关于与帮助")
     }
 
     private fun screenshot(name: String) {

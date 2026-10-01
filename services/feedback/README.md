@@ -30,7 +30,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now feiyu-feedback.service feiyu-feedback-purge.timer
 ```
 
-数据库位于 `/var/lib/feiyu-feedback/`，不在任何网站目录下，只有服务用户能读写。Caddy 站点片段见 [deploy/Caddyfile.example](deploy/Caddyfile.example)，全局 Caddy 配置通过 `E:\Projects\Services\vps-management` 的流程添加，不要覆盖其他站点。
+数据库位于 `/var/lib/feiyu-feedback/`，不在任何网站目录下，只有服务用户能读写。Caddy 站点块由 vps-management 维护（`caddy/feiyunote.caddy`，全局 Caddyfile 末尾 import）：反馈路径不写访问日志（`log_skip`），请求体上限 512 KB，`/feiyu/` 与 `/updates/` 由 `/srv/feiyunote` 静态提供，APK 使用 `application/vnd.android.package-archive`。修改时遵循该仓库的比对、备份、校验和显式 reload 流程，不要覆盖其他站点。
 
 ## 维护者读取
 

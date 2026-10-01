@@ -27,7 +27,7 @@ SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulat
 
 ## 0.3.2 更新与问题反馈实施计划
 
-日期：2026-10-01。状态：实施中，分支 `feat/0.3.2-support`（worktree `.claude/worktrees/0.3.2`）。P1/P2/P3 的本地代码与测试已完成，P4 未开始，HTTPS 与服务尚未部署。产品范围以 [spec §9](spec.md#9-032-更新与问题反馈待实现) 为准。用户后续授权使用 `feiyunote.cangming.fyi` 并直接配置 DNS；功能实现、HTTPS/服务部署和发布仍等待后续执行指令。
+日期：2026-10-01。状态：实施中，分支 `feat/0.3.2-support`（worktree `.claude/worktrees/0.3.2`）。P1 至 P4 的代码与测试已完成，反馈服务和站点已部署到 VPS，0.3.2 发布由 P5 收口（见下方实施进度）。产品范围以 [spec §9](spec.md#9-032-更新与问题反馈待实现) 为准。用户后续授权使用 `feiyunote.cangming.fyi` 并直接配置 DNS；功能实现、HTTPS/服务部署和发布仍等待后续执行指令。
 
 ### 当前基础与变更边界
 
@@ -175,7 +175,10 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - 新增需求：反馈页显示 QQ 群 1079399140 作为讨论渠道（spec F04），由 P4 实现。
 - 0.3.1 遗留问题并入 0.3.2：会话模型标签缩写为 `dsf.low` 这类形式（读屏仍读完整名称），窄屏输入区不再换行；公共聊天顶栏和模板选择标题改为“整理对话”；问答历史超过 60,000 字符时只发送最近的部分（`ContextBuilder.HISTORY_CHAR_BUDGET`）。新增 `ModelLabelTest` 和 `ContextBuilderTest` 的长历史用例；界面测试改为断言新标签与“整理对话”。Skill 的真实 GitHub 安装暂不验证，长期方向是框架内 Skill（spec §10）。
 - 已 rebase 到 `bc33554`（0.3.1 最终提交）。CI 去重：完整 CI 通过后把测试过的 tree 写入 `build/ci/full-passed`；pre-push 钩子发现推送的提交与它只差 Markdown 时跳过；远端推送到 main 只跑 `assembleDebug`，PR 和 tag 仍跑单测。
-- 下一步：P4 反馈客户端、草稿、支持页与设置入口、崩溃提示和 QQ 群显示。
+- P4 已完成：`K/support/FeedbackClient.kt`、`FeedbackDraftStore.kt`、`K/ui/SupportScreen.kt`、`SupportViewModel.kt`；设置页新增“关于与帮助”入口，应用根部负责崩溃提示，反馈页显示 QQ 群 1079399140。预览时冻结请求体，重试沿用同一个 submissionId；修改内容后生成新 ID；超过 30 天的未确认提交需要重新预览。分享时把文本写入 `cache/exports/feiyu-feedback-*.txt`（超过 24 小时自动清理），没有可接收的应用时改为复制。`FeedbackClientTest` 11 项覆盖请求体、码点上限、200/201 回执、各错误码与 Retry-After、8 KiB 上限、发出后超时只发一次、断连、无法连接、非白名单和草稿读写；`UiFlowTest` 新增两条界面流程：检查更新，未确认后重建 Activity 再重试且 ID 不变；崩溃提示进入反馈并附带诊断、分享交给其他应用、提交内容不含异常消息、再次启动不再提示。
+- 界面测试修正：输入后先收起键盘再点击；诊断内容很长时“分享”按钮会被挤出可见区域，因此分享和复制按钮移到诊断内容上方。
+- P5：版本改为 0.3.2（versionCode 7），更新 release notes 和中英 README。完整 CI 通过：JVM 60 项，仪器/界面 `OK (37 tests)`，通过记录 tree `146e755`。
+- 部署（2026-10-01，用户授权随 0.3.2 一起部署）：VPS 新增系统用户 `feiyu-feedback`，服务 `/opt/feiyu-feedback/server.py` 监听 127.0.0.1:8787，数据库 `/var/lib/feiyu-feedback/`（0700），每日清理 timer 已启用。Caddy 站点块由 vps-management 维护（`caddy/feiyunote.caddy`，提交 `b62ec80`、`abdb4b1`）：以 caddy 用户校验后通过 admin API reload（该单元没有 ExecReload）。HTTPS 证书已签发；根路径 302 跳到 `/feiyu/`；反馈路径不写访问日志（访问日志中计数为 0）；原有 `vps`、`groceries`、`cpr` 站点仍为 200。仓库内的 Caddy 样例已删除，改为指向 vps-management。
 
 ## 执行记录
 
