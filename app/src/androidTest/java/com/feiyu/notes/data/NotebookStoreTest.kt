@@ -318,12 +318,49 @@ class NotebookStoreTest {
     }
 
     @Test fun reviewRecordRejectsNonCourseNotebook() = runBlocking {
+        // Explicitly initialize General chat so -2 exists in the notebooks table
+        store.generalChat()
         val practice = store.createNotebook(NotebookKind.PRACTICE, "Practice")!!
+
         val resultPractice = store.insertReviewRecord(practice.id, "Topic", "Notes")
         assertTrue(resultPractice is ReviewInsertResult.InvalidCourse)
 
         val resultGeneral = store.insertReviewRecord(NotebookStore.GENERAL_ID, "Topic", "Notes")
         assertTrue(resultGeneral is ReviewInsertResult.InvalidCourse)
+
+        // Verify other operations on GENERAL_ID are rejected as well
+        assertTrue(store.listReviewRecords(NotebookStore.GENERAL_ID).isEmpty())
+        assertNull(store.getReviewRecord(NotebookStore.GENERAL_ID, 1L))
+        assertFalse(store.updateReviewRecord(NotebookStore.GENERAL_ID, 1L, "T", "N"))
+        assertFalse(store.setReviewStatus(NotebookStore.GENERAL_ID, 1L, ReviewStatus.UNDERSTOOD))
+        assertFalse(store.deleteReviewRecord(NotebookStore.GENERAL_ID, 1L))
+    }
+
+    @Test fun reviewRecordRejectsBlankTopic() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Physics")!!
+        val blankResult = store.insertReviewRecord(course.id, "   ", "Notes")
+        assertTrue(blankResult is ReviewInsertResult.Failed)
+
+        val valid = store.insertReviewRecord(course.id, "Topic", "Notes")
+        assertTrue(valid is ReviewInsertResult.Success)
+        val rec = (valid as ReviewInsertResult.Success).record
+
+        assertFalse(store.updateReviewRecord(course.id, rec.id, "   ", "Updated Notes"))
+    }
+
+    @Test fun reviewRecordRejectsIncompleteAssistantSource() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Math")!!
+        val lesson = store.createLesson(course.id, "Lesson")!!
+        val (q, pendingA) = ask(lesson.id, "Question")
+
+        // pendingA has state = PENDING
+        val resPending = store.insertReviewRecord(course.id, "Topic", "Notes", sourceEntryId = pendingA.id)
+        assertTrue(resPending is ReviewInsertResult.SourceNotFound)
+
+        // Complete the assistant reply
+        assertTrue(store.commitReply(pendingA.id, "Finished answer", EntryState.COMPLETE))
+        val resComplete = store.insertReviewRecord(course.id, "Topic", "Notes", sourceEntryId = pendingA.id)
+        assertTrue(resComplete is ReviewInsertResult.Success)
     }
 
     @Test fun reviewRecordCrudAndReopen() = runBlocking {
@@ -405,23 +442,43 @@ class NotebookStoreTest {
         val lesson2 = store.createLesson(course.id, "Optics")!!
         val (q1, a1) = ask(lesson1.id, "Newton's laws")
         val (q2, a2) = ask(lesson2.id, "Refraction")
+        val note = store.commitSummary(lesson1.id, "Summary note", emptyList(), null)!!
 
         val record1 = store.addReviewRecord(course.id, "Newton", "Law 1", sourceEntryId = a1.id)!!
         val record2 = store.addReviewRecord(course.id, "Optics", "Snell's Law", sourceEntryId = a2.id)!!
+        val recordNote = store.addReviewRecord(course.id, "Note", "Summary Review", sourceEntryId = note.id)!!
 
         assertFalse(store.getReviewRecord(course.id, record1.id)!!.sourceDeleted)
         assertFalse(store.getReviewRecord(course.id, record2.id)!!.sourceDeleted)
+        assertFalse(store.getReviewRecord(course.id, recordNote.id)!!.sourceDeleted)
 
         assertTrue(store.deleteThread(q1.id))
         val rec1AfterThreadDel = store.getReviewRecord(course.id, record1.id)!!
         assertTrue(rec1AfterThreadDel.sourceDeleted)
         assertEquals(a1.id, rec1AfterThreadDel.sourceEntryId)
         assertFalse(store.getReviewRecord(course.id, record2.id)!!.sourceDeleted)
+        assertFalse(store.getReviewRecord(course.id, recordNote.id)!!.sourceDeleted)
 
         assertTrue(store.deleteLesson(lesson2.id))
         val rec2AfterLessonDel = store.getReviewRecord(course.id, record2.id)!!
         assertTrue(rec2AfterLessonDel.sourceDeleted)
         assertEquals(a2.id, rec2AfterLessonDel.sourceEntryId)
+        assertFalse(store.getReviewRecord(course.id, recordNote.id)!!.sourceDeleted)
+
+        assertTrue(store.deleteNote(note.id))
+        val recNoteAfterDel = store.getReviewRecord(course.id, recordNote.id)!!
+        assertTrue(recNoteAfterDel.sourceDeleted)
+        assertEquals(note.id, recNoteAfterDel.sourceEntryId)
+    }
+
+    @Test fun isThreadArchivedDetectsThreadStatus() = runBlocking {
+        val course = store.createNotebook(NotebookKind.COURSE, "Chemistry")!!
+        val lesson = store.createLesson(course.id, "Organic")!!
+        val (q, a) = ask(lesson.id, "What is benzene?")
+
+        assertFalse(store.isThreadArchived(a.id))
+        assertTrue(store.setArchived(q.id, true))
+        assertTrue(store.isThreadArchived(a.id))
     }
 
     @Test fun upgradesFromV1ToV4PreservesDataAndAddsReviewTable() = runBlocking {

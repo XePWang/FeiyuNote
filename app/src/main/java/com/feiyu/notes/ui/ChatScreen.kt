@@ -92,8 +92,11 @@ fun ChatScreen(
     val notice by vm.notice.collectAsStateWithLifecycle()
     var summarizing by rememberSaveable { mutableStateOf(false) }
     var retryTemplateFor by rememberSaveable { mutableStateOf<Long?>(null) }
-    var reviewingEntry by remember { mutableStateOf<Entry?>(null) }
+    var reviewingEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     val d = data
+    val reviewingEntry = remember(d?.entries, reviewingEntryId) {
+        d?.entries?.firstOrNull { it.id == reviewingEntryId }
+    }
     val general = vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID
 
     Scaffold(
@@ -162,7 +165,9 @@ fun ChatScreen(
                                     if (user.templateId != null && d.templates.none { it.id == user.templateId }) retryTemplateFor = user.id
                                     else vm.retry(user.id)
                                 },
-                                onAddToReview = if (!practice) { { reviewingEntry = it } } else null,
+                                onAddToReview = if (!practice && vm.notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
+                                    { reviewingEntryId = it.id }
+                                } else null,
                             )
                         }
                     }
@@ -201,10 +206,12 @@ fun ChatScreen(
     }
     reviewingEntry?.let { entry ->
         val userQuestion = d?.entries?.firstOrNull { it.id == entry.parentEntryId }
-        val defaultTopic = userQuestion?.text?.lineSequence()?.firstOrNull()?.take(40)?.ifBlank {
-            context.getString(R.string.reply_number, entry.id)
-        } ?: context.getString(R.string.reply_number, entry.id)
-        val defaultNotes = entry.text.lineSequence().firstOrNull().orEmpty().take(80)
+        val (defaultTopic, defaultNotes) = ReviewDefaults.fromAssistantReply(
+            parentQuestionText = userQuestion?.text,
+            replyId = entry.id,
+            replyText = entry.text,
+            fallbackTitle = context.getString(R.string.reply_number, entry.id),
+        )
 
         ReviewRecordEditDialog(
             title = context.getString(R.string.add_to_review),
@@ -214,7 +221,7 @@ fun ChatScreen(
             onSave = { topic, notes ->
                 vm.addToReview(entry.id, topic, notes)
             },
-            onDismiss = { reviewingEntry = null },
+            onDismiss = { reviewingEntryId = null },
         )
     }
 }

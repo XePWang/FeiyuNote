@@ -42,11 +42,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.feiyu.notes.R
+import com.feiyu.notes.data.EntryKind
 import com.feiyu.notes.data.NotebookStore
 import com.feiyu.notes.data.ReviewInsertResult
 import com.feiyu.notes.data.ReviewRecord
 import com.feiyu.notes.data.ReviewStatus
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -54,7 +60,7 @@ fun CourseReviewScreen(
     store: NotebookStore,
     notebookId: Long,
     onBack: () -> Unit,
-    onNavigateToSource: (lessonId: Long, entryId: Long) -> Unit,
+    onNavigateToSource: (ReviewSourceDestination) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -63,9 +69,13 @@ fun CourseReviewScreen(
 
     var statusFilter by rememberSaveable { mutableStateOf<ReviewStatus?>(null) }
     var addingRecord by rememberSaveable { mutableStateOf(false) }
-    var editingRecord by remember { mutableStateOf<ReviewRecord?>(null) }
+    var editingRecordId by rememberSaveable { mutableStateOf<Long?>(null) }
     var deletingId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var notice by remember { mutableStateOf<String?>(null) }
+    var notice by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val editingRecord = remember(records, editingRecordId) {
+        records?.firstOrNull { it.id == editingRecordId }
+    }
 
     val filteredRecords = remember(records, statusFilter) {
         val list = records.orEmpty()
@@ -162,14 +172,22 @@ fun CourseReviewScreen(
                                     }
                                 }
                             },
-                            onEdit = { editingRecord = record },
+                            onEdit = { editingRecordId = record.id },
                             onDelete = { deletingId = record.id },
                             onJumpToSource = {
                                 val sourceId = record.sourceEntryId ?: return@ReviewRecordCard
                                 scope.launch {
                                     val entry = store.getEntry(sourceId)
                                     if (entry != null) {
-                                        onNavigateToSource(entry.lessonId, entry.id)
+                                        val destination = when {
+                                            entry.kind == EntryKind.NOTE ->
+                                                ReviewSourceDestination.Note(entry.lessonId, entry.id)
+                                            store.isThreadArchived(entry.id) ->
+                                                ReviewSourceDestination.Archived(entry.lessonId)
+                                            else ->
+                                                ReviewSourceDestination.Chat(entry.lessonId, entry.id)
+                                        }
+                                        onNavigateToSource(destination)
                                     } else {
                                         notice = context.getString(R.string.source_not_found)
                                     }
@@ -210,7 +228,7 @@ fun CourseReviewScreen(
                 val ok = store.updateReviewRecord(notebookId, record.id, topic, notes)
                 if (ok) null else context.getString(R.string.save_failed)
             },
-            onDismiss = { editingRecord = null },
+            onDismiss = { editingRecordId = null },
         )
     }
 
@@ -251,6 +269,11 @@ private fun ReviewRecordCard(
 ) {
     val context = LocalContext.current
     var statusMenu by remember { mutableStateOf(false) }
+    val formattedTime = remember(record.updatedAt) {
+        Instant.ofEpochMilli(record.updatedAt)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT))
+    }
 
     Card(
         Modifier
@@ -315,6 +338,12 @@ private fun ReviewRecordCard(
                 )
             }
 
+            Text(
+                text = formattedTime,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             // Source indicator and actions
             Row(
                 Modifier.fillMaxWidth(),
@@ -345,7 +374,7 @@ private fun ReviewRecordCard(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = onEdit) {
-                        Text(context.getString(R.string.rename))
+                        Text(context.getString(R.string.edit))
                     }
                     TextButton(onClick = onDelete) {
                         Text(context.getString(R.string.delete), color = MaterialTheme.colorScheme.error)
@@ -369,7 +398,7 @@ fun ReviewRecordEditDialog(
     val scope = rememberCoroutineScope()
     var topic by rememberSaveable { mutableStateOf(initialTopic) }
     var notes by rememberSaveable { mutableStateOf(initialNotes) }
-    var saving by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     val canSave = !saving && topic.isNotBlank()
@@ -433,6 +462,8 @@ fun ReviewRecordEditDialog(
                             } else {
                                 onDismiss()
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             errorMessage = context.getString(R.string.save_failed)
                         } finally {

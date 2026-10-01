@@ -112,7 +112,7 @@ class NotebookStore(
         val notebookId = getLesson(id)?.notebookId ?: return false
         var images = emptyList<String>()
         val deleted = write {
-            val now = System.currentTimeMillis()
+            val now = clock()
             db.execSQL(
                 """
                 UPDATE review_records SET source_deleted = 1, updated_at = ?
@@ -211,6 +211,11 @@ class NotebookStore(
     }
 
     suspend fun deleteNote(noteId: Long): Boolean = write {
+        val now = clock()
+        db.execSQL(
+            "UPDATE review_records SET source_deleted = 1, updated_at = ? WHERE source_entry_id = ? AND source_deleted = 0",
+            arrayOf<Any>(now, noteId)
+        )
         db.delete("entries", "id = ? AND kind = 'note'", args(noteId)) == 1
     }
 
@@ -271,7 +276,7 @@ class NotebookStore(
                 """,
                 rootId,
             ) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
-            val now = System.currentTimeMillis()
+            val now = clock()
             db.execSQL(
                 """
                 WITH RECURSIVE t(id) AS (SELECT ? UNION ALL SELECT e.id FROM entries e JOIN t ON e.parent_entry_id = t.id)
@@ -359,16 +364,26 @@ class NotebookStore(
         status: ReviewStatus = ReviewStatus.PENDING,
     ): ReviewInsertResult = write {
         if (!isCourseNotebook(notebookId)) return@write ReviewInsertResult.InvalidCourse
+        if (topic.isBlank()) return@write ReviewInsertResult.Failed
 
         if (sourceEntryId != null) {
-            val sourceNotebookId = query(
+            val sourceEntry = query(
                 """
-                SELECT l.notebook_id FROM entries e JOIN lessons l ON e.lesson_id = l.id
+                SELECT e.kind, e.state, l.notebook_id FROM entries e JOIN lessons l ON e.lesson_id = l.id
                 WHERE e.id = ?
                 """,
                 sourceEntryId
-            ) { it.getLong(0) }.firstOrNull()
-            if (sourceNotebookId == null || sourceNotebookId != notebookId) {
+            ) { Triple(it.getString(0), it.getString(1), it.getLong(2)) }.firstOrNull()
+            if (sourceEntry == null || sourceEntry.third != notebookId) {
+                return@write ReviewInsertResult.SourceNotFound
+            }
+            val (kindStr, stateStr, _) = sourceEntry
+            val isValidSource = when (kindStr?.lowercase()) {
+                EntryKind.NOTE.db, EntryKind.USER.db -> true
+                EntryKind.ASSISTANT.db -> stateStr?.lowercase() == EntryState.COMPLETE.db
+                else -> false
+            }
+            if (!isValidSource) {
                 return@write ReviewInsertResult.SourceNotFound
             }
 
@@ -422,6 +437,7 @@ class NotebookStore(
         status: ReviewStatus? = null,
     ): Boolean = write {
         if (!isCourseNotebook(notebookId)) return@write false
+        if (topic.isBlank()) return@write false
         val now = clock()
         val values = ContentValues().apply {
             put("topic", topic.trim())
@@ -451,10 +467,24 @@ class NotebookStore(
         db.delete("review_records", "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
     }
 
+    suspend fun isThreadArchived(entryId: Long): Boolean = read {
+        query(
+            """
+            WITH RECURSIVE t(id, parent_entry_id, archived) AS (
+                SELECT id, parent_entry_id, archived FROM entries WHERE id = ?
+                UNION ALL
+                SELECT e.id, e.parent_entry_id, e.archived FROM entries e JOIN t ON e.id = t.parent_entry_id
+            )
+            SELECT archived FROM t WHERE parent_entry_id IS NULL LIMIT 1
+            """,
+            entryId
+        ) { it.getLong(0) == 1L }.firstOrNull() ?: false
+    }
+
     // ---- helpers ----
 
     private fun SQLiteDatabase.isCourseNotebook(notebookId: Long): Boolean =
-        count("SELECT COUNT(*) FROM notebooks WHERE id = ? AND kind = 'course'", notebookId) == 1L
+        notebookId != GENERAL_ID && count("SELECT COUNT(*) FROM notebooks WHERE id = ? AND kind = 'course'", notebookId) == 1L
 
     private fun SQLiteDatabase.validLink(kind: NotebookKind, linkedCourseId: Long?, selfId: Long?): Boolean {
         if (linkedCourseId == null) return true

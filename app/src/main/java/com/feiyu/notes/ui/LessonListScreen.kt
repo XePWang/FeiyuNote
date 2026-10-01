@@ -59,7 +59,7 @@ fun LessonListScreen(
                 title = { Text(notebook?.name ?: "") },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
                 actions = {
-                    if (!practice && onOpenReview != null) {
+                    if (!practice && notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID && onOpenReview != null) {
                         TextButton(onClick = onOpenReview) {
                             Text(context.getString(R.string.course_review))
                         }

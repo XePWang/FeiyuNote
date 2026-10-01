@@ -143,7 +143,7 @@ fun NoteScreen(
                         }
                     }
                 }) { Text(context.getString(R.string.share)) }
-                if (notebook?.kind == com.feiyu.notes.data.NotebookKind.COURSE) {
+                if (notebook?.kind == com.feiyu.notes.data.NotebookKind.COURSE && notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
                     OutlinedButton(onClick = { addingToReview = true }) {
                         Text(context.getString(R.string.add_to_review))
                     }
@@ -174,10 +174,10 @@ fun NoteScreen(
     )
     val activeNote = note
     if (addingToReview && activeNote != null) {
-        val defaultTopic = activeNote.text.lineSequence().firstOrNull()?.take(40)?.ifBlank {
-            context.getString(R.string.note_number, noteId)
-        } ?: context.getString(R.string.note_number, noteId)
-        val defaultNotes = activeNote.text.take(120)
+        val (defaultTopic, defaultNotes) = ReviewDefaults.fromNote(
+            noteText = activeNote.text,
+            fallbackTitle = context.getString(R.string.note_number, noteId),
+        )
 
         ReviewRecordEditDialog(
             title = context.getString(R.string.add_to_review),

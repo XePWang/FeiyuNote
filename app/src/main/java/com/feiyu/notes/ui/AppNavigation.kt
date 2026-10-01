@@ -97,8 +97,15 @@ fun AppNavigation(initial: List<NavKey>) {
                     store = app.store,
                     notebookId = key.notebookId,
                     onBack = back,
-                    onNavigateToSource = { lessonId, entryId ->
-                        backStack.openDetail(LessonKey(key.notebookId, lessonId, focusEntryId = entryId))
+                    onNavigateToSource = { destination ->
+                        when (destination) {
+                            is ReviewSourceDestination.Note ->
+                                backStack.add(NoteKey(key.notebookId, destination.lessonId, destination.noteId))
+                            is ReviewSourceDestination.Archived ->
+                                backStack.add(ArchivedKey(key.notebookId, destination.lessonId))
+                            is ReviewSourceDestination.Chat ->
+                                backStack.add(LessonKey(key.notebookId, destination.lessonId, focusEntryId = destination.entryId))
+                        }
                     },
                 )
             }

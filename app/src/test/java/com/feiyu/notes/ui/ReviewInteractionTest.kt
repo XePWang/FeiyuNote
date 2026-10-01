@@ -8,70 +8,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import kotlin.coroutines.cancellation.CancellationException
 
 class ReviewInteractionTest {
 
-    // Helper logic matching UI extraction in ChatScreen
-    private fun extractAssistantReviewDefaults(
-        parentQuestionText: String?,
-        replyId: Long,
-        replyText: String,
-        fallbackTitle: String,
-    ): Pair<String, String> {
-        val topic = parentQuestionText?.lineSequence()?.firstOrNull()?.take(40)?.ifBlank {
-            fallbackTitle
-        } ?: fallbackTitle
-        val notes = replyText.lineSequence().firstOrNull().orEmpty().take(80)
-        return topic to notes
-    }
-
-    // Helper logic matching UI extraction in NoteScreen
-    private fun extractNoteReviewDefaults(
-        noteText: String,
-        fallbackTitle: String,
-    ): Pair<String, String> {
-        val topic = noteText.lineSequence().firstOrNull()?.take(40)?.ifBlank {
-            fallbackTitle
-        } ?: fallbackTitle
-        val notes = noteText.take(120)
-        return topic to notes
-    }
-
-    // Helper simulating dialog submission state machine
-    private class SimulatedDialogState(
-        var topic: String,
-        var notes: String,
-    ) {
-        var saving = false
-        var errorMessage: String? = null
-
-        val canSave: Boolean get() = !saving && topic.isNotBlank()
-
-        suspend fun submit(onSave: suspend (String, String) -> String?): Boolean {
-            if (!canSave) return false
-            saving = true
-            errorMessage = null
-            return try {
-                val err = onSave(topic.trim(), notes.trim())
-                if (err != null) {
-                    errorMessage = err
-                    false
-                } else {
-                    true
-                }
-            } catch (e: Exception) {
-                errorMessage = e.message ?: "Save failed"
-                false
-            } finally {
-                saving = false
-            }
-        }
-    }
-
     @Test
     fun assistantReplyDefaultsExtractsFirstLineAndTruncates() {
-        val (topic, notes) = extractAssistantReviewDefaults(
+        val (topic, notes) = ReviewDefaults.fromAssistantReply(
             parentQuestionText = "什么是柯西-施瓦茨不等式？\n请给出详细证明",
             replyId = 42L,
             replyText = "柯西-施瓦茨不等式是线性代数中的重要不等式。\n证明如下：设...",
@@ -83,7 +28,7 @@ class ReviewInteractionTest {
 
     @Test
     fun assistantReplyDefaultsFallsBackWhenQuestionBlank() {
-        val (topic, notes) = extractAssistantReviewDefaults(
+        val (topic, notes) = ReviewDefaults.fromAssistantReply(
             parentQuestionText = "   \n\n",
             replyId = 42L,
             replyText = "回答第一行",
@@ -96,7 +41,7 @@ class ReviewInteractionTest {
     @Test
     fun noteDefaultsExtractsTitleAndNotesWithBounds() {
         val longLine = "A".repeat(150)
-        val (topic, notes) = extractNoteReviewDefaults(
+        val (topic, notes) = ReviewDefaults.fromNote(
             noteText = "$longLine\n第二行内容",
             fallbackTitle = "笔记 #1",
         )
@@ -106,7 +51,7 @@ class ReviewInteractionTest {
 
     @Test
     fun dialogStateBlocksEmptyTopicAndTrimsOnSubmit() = runTest {
-        val state = SimulatedDialogState("   ", "notes")
+        val state = ReviewDialogState("   ", "notes", sourceEntryId = null)
         assertFalse(state.canSave)
 
         var passedTopic: String? = null
@@ -130,7 +75,7 @@ class ReviewInteractionTest {
 
     @Test
     fun dialogStatePreservesDraftOnFailure() = runTest {
-        val state = SimulatedDialogState("我的知识点", "我的详细疑问草稿")
+        val state = ReviewDialogState("我的知识点", "我的详细疑问草稿", sourceEntryId = null)
 
         val ok = state.submit { _, _ ->
             // Simulate source deletion failure during editing
@@ -147,7 +92,7 @@ class ReviewInteractionTest {
 
     @Test
     fun dialogStatePreservesDraftOnException() = runTest {
-        val state = SimulatedDialogState("我的知识点", "我的草稿")
+        val state = ReviewDialogState("我的知识点", "我的草稿", sourceEntryId = null)
 
         val ok = state.submit { _, _ ->
             throw IllegalStateException("Database locked")
@@ -158,6 +103,23 @@ class ReviewInteractionTest {
         assertEquals("Database locked", state.errorMessage)
         assertEquals("我的知识点", state.topic)
         assertEquals("我的草稿", state.notes)
+    }
+
+    @Test
+    fun dialogStateRethrowsCancellationException() = runTest {
+        val state = ReviewDialogState("知识点", "备注", sourceEntryId = null)
+
+        try {
+            state.submit { _, _ ->
+                throw CancellationException("Operation cancelled")
+            }
+            fail("Expected CancellationException was not thrown")
+        } catch (e: CancellationException) {
+            assertEquals("Operation cancelled", e.message)
+        }
+        // Saving state must be cleanly reset even after cancellation
+        assertFalse(state.saving)
+        assertNull(state.errorMessage)
     }
 
     @Test
