@@ -54,7 +54,14 @@ fun TemplateScreen(store: NotebookStore, onBack: () -> Unit) {
             items(templates.orEmpty(), key = { it.id }) { t ->
                 ListItem(
                     headlineContent = { Text(t.name) },
-                    supportingContent = { Text(t.instruction.take(60)) },
+                    supportingContent = {
+                        val origin = when {
+                            t.source == Template.BUILTIN_GUIDED -> context.getString(R.string.template_builtin) + " · "
+                            t.isSkill -> context.getString(R.string.template_skill, t.source!!.removePrefix("https://raw.githubusercontent.com/")) + "\n"
+                            else -> ""
+                        }
+                        Text(origin + t.instruction.take(60))
+                    },
                     trailingContent = { TextButton(onClick = { deletingId = t.id }) { Text(context.getString(R.string.delete)) } },
                     modifier = Modifier.clickable { editingId = t.id },
                 )

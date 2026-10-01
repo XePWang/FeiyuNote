@@ -30,7 +30,7 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 
 ## 版本更新
 
-- **[0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1)**：首页固定公共聊天，无需建课即可随手问；默认模型 DeepSeek V4.1 Flash，推理强度提供官方 low/high/max 三档（默认 low），可在设置中改默认值，也可在每个会话单独调整；设置页可测试连接。问答按会话顺序编号，提问 N 对应回答 N；长会话右侧提供跳转节点。新增语言、日夜和字号设置，修复字体过细。
+- **[0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1)**：首页新增“一起来聊天吧”公共聊天卡片，无需建课即可随手问；欢迎卡片和公共聊天卡片的插图都可在设置中换成自己的图片。默认模型 DeepSeek V4.1 Flash，推理强度提供官方 low/high/max 三档（默认 low），可在设置中改默认值，也可在每个会话单独调整；设置页可测试连接。预装“引导式讲解”模板，新建笔记本默认使用。设置新增“高级”：可修改内置提示词，也可通过 GitHub 链接安装 Skill（只读取 SKILL.md 的文字说明作为讲解模板，不运行任何代码）。问答按会话顺序编号，提问 N 对应回答 N；长会话右侧提供跳转节点。新增语言、日夜和字号设置，修复字体过细。
 - **[0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0)**：一条提问支持多张图片；相册多选、继续拍照追加、逐张预览和移除，导入失败保留其他图片。旧单图笔记自动迁移，多图支持重试与删除清理。使用系统照片选择器，无需整个相册的读取权限。
 - **[0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0)**：对话、笔记与导出支持离线 LaTeX；新增编辑/预览及源码复制，完善 API Key 加密与凭据保护。
 - **[0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)**：课程/课次问答、刷题本、笔记整理与导出；中英界面、鲸鱼头像与自适应布局。

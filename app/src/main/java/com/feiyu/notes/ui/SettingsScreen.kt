@@ -138,6 +138,8 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
                     if (avatarBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     avatarMessage?.let { Text(it, Modifier.testTag("avatar-status"), style = MaterialTheme.typography.bodySmall) }
                 }
+                HomeImageSettings()
+                AdvancedSettings()
                 SettingsSection(context.getString(R.string.about)) {
                     Text(context.getString(R.string.art_credit), style = MaterialTheme.typography.bodySmall)
                     Text("Noto Sans SC · SIL Open Font License 1.1", style = MaterialTheme.typography.bodySmall)
@@ -157,7 +159,7 @@ fun SettingsScreen(settings: ApiSettings, onOpenTemplates: () -> Unit, navigatio
 }
 
 @Composable
-private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)

@@ -154,6 +154,7 @@ class UiFlowTest {
         ask("再举个例子")
         awaitAnswer("答案2")
         assertEquals(listOf("什么是极限", "答案1", "再举个例子"), inputs.last().messages.map { it.text })
+        assertTrue("new notebooks default to the guided template", inputs.last().systemText.contains(com.feiyu.notes.study.StudyPrompts.GUIDED))
 
         clickNth("展开讲解", 0)
         compose.onNodeWithTag("send").performClick()
@@ -329,6 +330,7 @@ class UiFlowTest {
         compose.onAllNodesWithTag("thread-menu")[0].performClick()
         click("恢复")
         systemBack()
+        compose.onNodeWithTag("chat-list").performScrollToIndex(1)
         waitText("第一问")
 
         compose.onNodeWithTag("chat-list").performScrollToIndex(1)
@@ -410,6 +412,8 @@ class UiFlowTest {
     }
 
     @Test fun generalChatPairsNumbersJumpsWithoutRequestsAndUsesSessionEffort() {
+        waitText("一起来聊天吧")
+        screenshot("home-general-chat")
         click("公共聊天")
         waitText("deepseek-flash · Low")
         ask("第一问")
@@ -437,6 +441,26 @@ class UiFlowTest {
         awaitAnswer("答案3")
         assertEquals("high", configs.last().effort)
         screenshot("general-chat-phone")
+    }
+
+    @Test fun advancedSettingsOverrideBuiltInPromptAndExplainSkills() {
+        click("设置")
+        compose.onNodeWithTag("advanced-toggle").performScrollTo().performClick()
+        waitText("安装 Skill")
+        compose.onNodeWithTag("skill-url").assertExists()
+        compose.onNodeWithTag("prompt-GENERAL").performScrollTo().performClick()
+        compose.onNodeWithTag("prompt-editor").performTextClearance()
+        compose.onNodeWithTag("prompt-editor").performTextInput("自定义公共提示")
+        compose.onNodeWithTag("prompt-save").performClick()
+        waitText("已修改")
+        systemBack()
+
+        click("公共聊天")
+        ask("你好")
+        awaitAnswer("答案1")
+        assertTrue(inputs.last().systemText.startsWith("自定义公共提示"))
+        app.prefs.setPrompt(com.feiyu.notes.study.PromptKind.GENERAL, null)
+        assertEquals(com.feiyu.notes.study.PromptKind.GENERAL.default, app.prefs.prompt(com.feiyu.notes.study.PromptKind.GENERAL))
     }
 
     private fun screenshot(name: String) {

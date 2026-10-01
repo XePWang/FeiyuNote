@@ -29,6 +29,10 @@ class FeiyuApp : Application() {
 
     lateinit var avatars: com.feiyu.notes.settings.AvatarFiles
         private set
+    lateinit var welcomeImage: com.feiyu.notes.settings.AvatarFiles
+        private set
+    lateinit var chatImage: com.feiyu.notes.settings.AvatarFiles
+        private set
     lateinit var photos: PhotoFiles
         private set
     lateinit var store: NotebookStore
@@ -82,12 +86,14 @@ class FeiyuApp : Application() {
         generate: suspend (AiConfig, AiInput) -> AiReply,
     ) {
         avatars = com.feiyu.notes.settings.AvatarFiles(filesRoot)
+        welcomeImage = com.feiyu.notes.settings.AvatarFiles(filesRoot, "welcome.png")
+        chatImage = com.feiyu.notes.settings.AvatarFiles(filesRoot, "chat.png")
         photos = PhotoFiles(filesRoot)
         store = NotebookStore(NotebookDatabase(this, databaseName), photos)
         prefs = AppPrefs(this, prefsName)
         // No request survives the process, so leftover pending replies become interrupted first.
         val recovery: Job = appScope.launch { store.markPendingInterrupted() }
-        generator = Generator(this, store, photos, loadConfig, appScope, ready = recovery, generate = generate)
+        generator = Generator(this, store, photos, loadConfig, appScope, ready = recovery, generate = generate, prompt = prefs::prompt)
     }
 
     companion object {

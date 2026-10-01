@@ -62,7 +62,7 @@ object ContextBuilder {
      * Summary of a lesson's completed Q&A, text only (spec §6). [lessonEntries] must already
      * exclude archived threads. Returns null when there is nothing completed to summarize.
      */
-    fun buildSummary(lessonEntries: List<Entry>, template: Template?): Pair<AiInput, List<Long>>? {
+    fun buildSummary(lessonEntries: List<Entry>, template: Template?, base: String = PromptKind.SUMMARY.default): Pair<AiInput, List<Long>>? {
         val answered = lessonEntries.filter { it.kind == EntryKind.ASSISTANT && it.state == EntryState.COMPLETE }
         if (answered.isEmpty()) return null
         val byId = lessonEntries.associateBy { it.id }
@@ -76,7 +76,7 @@ object ContextBuilder {
             sources += listOf(question.id, answer.id)
         }
         if (sources.isEmpty()) return null
-        val system = StudyPrompts.withTemplate(StudyPrompts.SUMMARY_SYSTEM.trimIndent(), template?.instruction)
+        val system = StudyPrompts.withTemplate(base, template?.instruction)
         val input = AiInput(system, listOf(AiMessage(AiRole.USER, "本课问答如下：\n" + lines.joinToString("\n"))))
         return input to sources.distinct()
     }

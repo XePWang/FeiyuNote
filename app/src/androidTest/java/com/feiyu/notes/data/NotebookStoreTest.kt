@@ -73,7 +73,8 @@ class NotebookStoreTest {
         assertEquals("old answer", migrated.last().text)
         assertTrue(migrated.last().imagePaths.isEmpty())
         assertTrue(photos.isUsable(1, oldImage))
-        assertEquals(2, database.readableDatabase.version)
+        assertEquals(NotebookDatabase.VERSION, database.readableDatabase.version)
+        assertEquals(listOf(com.feiyu.notes.data.Template.BUILTIN_GUIDED), store.listTemplates().map { it.source })
     }
 
     @Test fun multiplePhotosSurviveReopenAndAreDeletedWithTheirOwner() = runBlocking {

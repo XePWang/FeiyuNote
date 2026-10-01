@@ -52,6 +52,8 @@ class Generator(
     /** Completes once leftover pending replies have been marked interrupted. */
     private val ready: Job,
     private val generate: suspend (AiConfig, AiInput) -> AiReply = { config, input -> DeepSeekClient(config).generate(input) },
+    /** Current text of a built-in system prompt (user override or default). */
+    private val prompt: (PromptKind) -> String = { it.default },
 ) {
     private val context get() = AppLanguage.context(appContext)
     private val _status = MutableStateFlow(GenerationStatus())
@@ -81,7 +83,7 @@ class Generator(
     suspend fun summarize(notebookId: Long, lessonId: Long, templateId: Long?): StartResult = exclusive {
         ready.join()
         val template = templateId?.let { store.getTemplate(it) ?: return@exclusive StartResult.Invalid(TEMPLATE_GONE) }
-        val (input, sources) = ContextBuilder.buildSummary(store.readEntries(lessonId), template)
+        val (input, sources) = ContextBuilder.buildSummary(store.readEntries(lessonId), template, prompt(PromptKind.SUMMARY))
             ?: return@exclusive StartResult.Invalid(context.getString(R.string.summary_empty))
         val running = GenerationStatus.Running(notebookId, lessonId, null, isSummary = true)
         _status.value = GenerationStatus(running)
@@ -122,7 +124,7 @@ class Generator(
                 val entries = store.readEntries(user.lessonId, includeArchived = true)
                 val reference = user.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
                 val template = user.templateId?.let { store.getTemplate(it) }
-                val base = if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) StudyPrompts.GENERAL_SYSTEM else StudyPrompts.SYSTEM
+                val base = prompt(if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) PromptKind.GENERAL else PromptKind.STUDY)
                 val input = ContextBuilder.buildTurn(user, entries, reference, template, resolvePhoto = { photos.resolvePhoto(notebookId, it) }, base = base)
                 val answer = generate(requireConfig(user.lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
                 message = if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) null else DISCARDED

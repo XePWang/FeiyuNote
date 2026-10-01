@@ -25,6 +25,128 @@
 
 SDK 缺失时使用 `scripts/setup-sdk.ps1`，需要模拟器时加 `-WithEmulator`。SDK 默认位于 `%LOCALAPPDATA%\Android\Sdk`，CI 使用独立 `Feiyu_CI_API36`（`emulator-5556`），只接受模拟器目标。JDK、SDK 与 AVD 为持久环境，不应纳入临时目录清理。
 
+## 0.3.2 更新与问题反馈实施计划
+
+日期：2026-10-01。状态：已规划，未实施。产品范围以 [spec §9](spec.md#9-032-更新与问题反馈待实现) 为准。本次授权为编写计划；代码修改、部署和发布等待后续执行指令，本文不创建远端 Issue、发送邮件或购买服务。
+
+### 当前基础与变更边界
+
+- 主代码位于 `E:\Projects\Opensource\肥鱼笔记`；另一个 `FeiyuNote` 工作目录目前只有 `.git` 和 `assets`，实施前应核对所在 checkout。
+- 复用 `K/ui/SettingsScreen.kt::SettingsScreen`、`SettingsSection`，Navigation 3 的 `K/ui/AppNavigation.kt`，以及 `K/FeiyuApp.kt` 的应用生命周期和测试环境注入。
+- 已有 OkHttp、kotlinx.serialization、JUnit、MockWebServer、Compose 仪器测试和 FileProvider。本次客户端不增加依赖，不迁移笔记数据库。
+- `K/ai/AiTypes.kt::AiError` 的部分 message 含服务响应、网络地址或图片名；诊断不能直接写 `message`、`toString()` 或 `printStackTrace()`。保留原用户错误提示，单独映射安全的错误类型和状态码。
+- 发布入口是 `.github/workflows/android.yml`，目前只上传 GitHub Releases。`app/src/main/res/xml/file_paths.xml` 已暴露 `cache/exports/`，诊断分享可复用该目录，不扩大到整个私有目录。
+- 当前工作区有其他未提交功能，涉及设置、模板、提示词、数据层等；本计划只追加自己的范围，不覆盖或重排这些改动。历史发布记录中 0.3.1 为 versionCode 4，当前工作区为 versionCode 5 / versionName 0.3.1；版本收口由发布项统一负责，不能直接认定 5 仍未占用。
+
+### 实施默认值与共享接口
+
+以下为本计划提出的实施默认值。接口可据此开始本地开发；真实域名、VPS 环境、对外保留期限由 P0 收口。若修改字段、语义或限制，只暂停受影响的消费者并同步本节。
+
+**更新接口。** 静态发布端生产 `GET /updates/android.json`，`UpdateClient` 消费；UTF-8 JSON，schemaVersion 为 1，响应上限 32 KiB，总请求超时 15 秒。只手动检查，不复用带 DeepSeek 凭据的请求构造，不携带 API Key。字段如下：
+
+```json
+{
+  "schemaVersion": 1,
+  "versionCode": 5,
+  "versionName": "0.3.2",
+  "minSdk": 26,
+  "notes": {"zh": "更新说明", "en": "Release notes"},
+  "downloadPageUrl": "https://downloads.example.invalid/feiyu/"
+}
+```
+
+示例中的版本号数值和域名不是发布配置。只有远端 versionCode 大于本机才提示升级；设备低于 minSdk 时说明系统不受支持并禁用下载。必需字段缺失、类型错误、不支持的 schemaVersion、超限响应均视为检查失败。说明按应用语言选择，缺少对应语言时使用英文；作为普通文本显示。更新源及下载页必须 HTTPS 且属于 P0 确认的主机白名单，重定向也逐跳校验；不得退回 GitHub。测试通过注入本地 MockWebServer 地址完成，不改变 release 的明文流量限制。
+
+**诊断接口。** 新建 `K/support/Diagnostics.kt`，由应用生命周期及出错点生产数据，反馈预览、提交和分享消费同一份快照。对外提供 `record(event: DiagnosticEvent)`、`snapshot(): DiagnosticSnapshot` 和清理入口；使用固定事件/错误枚举和白名单字段，禁止任意 Map 或任意 message 成为日志入口。快照为 schemaVersion 1，含 `app { versionName, versionCode }`、`device { manufacturer, model, androidSdk }`、`events`、可空的 `crash` 和 `truncated`。事件字段限 UTC 时间、固定操作名、结果、错误分类、可空 HTTP 状态码及耗时；崩溃只含异常类名及限定长度的类名/方法名/源码文件名/行号，不含异常消息和运行时路径。
+
+普通日志按日轮转，保留最近 7 天且总计不超过 1 MiB；最近一份崩溃记录上限 64 KiB，也在 7 天后过期。快照最多 256 KiB，超限按完整事件从旧到新移除并置 `truncated=true`，不能截断成无效 JSON。单事件最多 4 KiB，堆栈最多 64 帧、原因链最多 4 层。正常写入在 IO 调度器中串行完成；异常处理只做有界的同步落盘，写入失败也必须调用之前的异常处理器。崩溃处理器每进程只安装一次，测试环境切换不重复套装；拒绝或忽略提示后该次崩溃不再自动弹出。
+
+**反馈接口。** 新建客户端 `FeedbackClient` 调用 `POST /api/v1/feedback`，服务端由 P2 生产。使用 `application/json; charset=utf-8`，schemaVersion 为 1；不携带 DeepSeek Key，也不把长期服务密钥嵌入 APK。总请求超时 20 秒，关闭自动重试及 POST 重定向。请求体上限 512 KiB，不支持压缩请求体或附件：
+
+```json
+{
+  "schemaVersion": 1,
+  "submissionId": "客户端生成的 UUID",
+  "description": "问题描述",
+  "diagnostics": null
+}
+```
+
+description 去除首尾空白后为 1 至 4000 个 Unicode 码点；diagnostics 未勾选时必须为 null，勾选时为上述完整快照。未附带诊断时不额外提交设备信息。用户预览后冻结这一请求；失败重试使用同一个 submissionId 和相同内容，修改描述或诊断选择后生成新 ID。服务端事务持久保存后返回 `201 {"reportId":"服务端生成的 UUID"}`；相同 submissionId 和内容重试返回 200 及原编号，内容不同返回 409，绝不覆盖原报告。去重记录与报告一同保留 30 天；超期草稿重试时重新确认、生成新 ID，并提示无法判断旧报告是否曾送达。
+
+失败响应使用 `{"error":"固定错误码"}`：400/415 为格式或媒体类型错误，409 为提交冲突，413 为过大，429 为限流并附 Retry-After，503 为暂不可用或存储容量不足。客户端按状态显示本地化提示，不展示服务端原始内容；只有收到有效 200/201 和合法 reportId 才显示成功，其他响应或断线均保留草稿。所有反馈响应上限 8 KiB。
+
+匿名入口不提供公开查询或列表。服务端建议保留 30 天，每 IP 每分钟最多 5 次（反向代理执行，IP 只作短期限流），报告总存储预算 256 MiB；超预算拒收并返回 503，不丢弃尚未到期的报告。服务和代理均不记录请求正文，反馈路径不保留常规访问日志；来源 IP 仅信任已配置代理。维护者通过现有 SSH 权限读取指定反馈编号，无需新增管理后台。
+
+### 工作项与验收
+
+#### P0：确认部署地址与发布基线
+
+- 产出：确定更新源、下载页、APK 地址、反馈 API、接收方说明及 30 天保留期；确认 yz_vps 的现有反向代理、Python 3、服务目录、运行用户和存储空间。上述真实值尚未检查，不能把示例域名写入正式 APK。
+- 范围：只读查看已授权资源及现有发布版本；结果补充到本节。新增部署说明由 P2 写入 `services/feedback/README.md`，不在仓库保存密钥。版本协调覆盖当前未提交工作，最终 versionName 为 0.3.2，versionCode 严格大于所有已分发构建。
+- 步骤：先确认可复用的 HTTPS 域名和托管，再确认从目标用户网络访问下载/API 的可行性；选定已有资源，不默认购域名、订阅或新增付费存储。
+- 验证：记录地址、主机、部署路径、发布基线和实际连通结果；域名未定时明确“未验证”，不得以 VPS SSH 可达替代用户网络可达。
+- 停止条件：缺少域名归属、服务运行环境或发布基线时暂停正式配置和上线验证；P1、P3、P4 的本地实现与模拟测试仍可继续。需要购买服务时先准备具体服务商、价格/币种、账号和条款，购买等待该具体行动的用户授权。
+
+#### P1：本地诊断与崩溃恢复提示
+
+- 产出：实现 L01/L02，反馈流程能读取有界、可预览的诊断快照。
+- 范围：新增 `K/support/Diagnostics.kt`、`DiagnosticModels.kt`；修改 `K/FeiyuApp.kt`、`K/study/Generator.kt`、`K/ui/ModelSettings.kt`、`K/study/StudyViewModel.kt`、`K/ui/NoteScreen.kt` 中实际的生成、连接测试、图片导入和导出错误入口。新增 `app/src/test/java/com/feiyu/notes/support/DiagnosticsTest.kt` 及必要的隔离仪器测试。提示界面的导航与文案统一交 P4 集成。
+- 步骤：先实现白名单记录与轮转，再接入上述失败点和启动初始化；保留协程取消语义，取消不是崩溃。从合成异常构造安全堆栈，崩溃重启后向 P4 提供待处理状态。诊断数据和测试数据使用各自私有目录，不修改笔记数据库或导出正文。
+- 验证：用包含合成 Key、私密正文、URL 和文件路径的异常证明这些内容不出现在快照；验证按天/容量清理、快照截断后仍可解析、并发写入及磁盘写失败不会破坏业务结果。隔离崩溃实验验证落盘、下次启动提示及调用原处理器；不能杀死仪器测试 runner 来冒充通过。
+- 停止条件：要收集白名单之外的内容、引入后台上传或接管系统崩溃行为时回到范围决策；一般测试失败由本项修复。部分崩溃无记录时按 L02 的覆盖边界报告。
+
+#### P2：反馈接收服务及部署准备
+
+- 产出：实现 F01 的持久接收、去重、回执和维护者读取；服务端准备好与客户端联调。
+- 范围：新增 `services/feedback/server.py`、`test_server.py`、`README.md` 及最小服务/反向代理配置样例。本项独占服务目录和测试数据库，不改 Android 文件。
+- 步骤：建议用 Python 3 标准库 HTTP 服务与 sqlite3，在反向代理后仅监听回环地址、单进程运行；SQLite 独立于应用笔记库，以 submissionId 唯一约束和事务完成去重，不增加 Web 框架、容器或数据库服务。实现有界读取、读超时、结构/字段/大小验证和固定错误响应，代理限制连接数、大小和频率。准备最小 systemd 配置、按日清理过期报告和只按 reportId 读取的命令；数据库置于非网站公开目录，仅服务用户可读写。若 VPS 已有合适服务框架，由 P0 决定复用，并在实现前更新运行方式。
+- 验证：`python -m unittest discover -s services/feedback -p 'test_*.py'` 使用临时库和合成报告，覆盖首次/重复/并发提交、同 ID 不同内容、非法 schema、超限、重启后回执、事务失败不返回成功及过期清理。代理侧单独验证 429、413、非公开监听和公开目录不可读取报告。Windows 执行 Python 时设置 `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，分别检查退出码与数据库实际记录。
+- 停止条件：生产部署等 P0 真实参数及后续执行授权；无需部署即可完成本地服务和单测。任何向第三方发邮件、通知或购服务的扩展均不属于本项；若确需增加，先完成可审阅内容并等待具体用户授权。
+
+#### P3：检查更新与独立下载页
+
+- 产出：实现 U01/U02 的版本查询模块及可直接下载 APK 的静态页面。
+- 范围：新增 `K/support/UpdateClient.kt`、`UpdateManifest.kt`、`app/src/test/java/com/feiyu/notes/support/UpdateClientTest.kt`；新增 `site/feiyu/index.html`、`site/updates/android.json` 模板和 `scripts/publish-download.ps1`。本项不改设置页、字符串资源和 GitHub 发布 workflow，共享位置由 P4/P5 集成。
+- 步骤：按固定接口查询和比较版本，用 PackageManager 获取安装版本；页面给出版本、说明、下载按钮、系统安装简短指引和对应版本源码/许可证入口。复用现有签名 APK，发布脚本接受 APK、版本和部署目的地参数，先验证再上传 APK 与页面，最后原子替换版本 JSON；失败保留旧版索引。GitHub 保留为可选源码渠道，下载按钮不指向它。
+- 验证：MockWebServer 覆盖远端更高/相同/更低版本、不兼容 minSdk、坏 JSON、未知 schema、超限、超时、HTTP 错误、非 HTTPS/非白名单链接及重定向；断言请求不带凭据。静态页验证窄屏下载按钮、可访问名称和可复制下载链接，发布脚本用测试目录验证中途失败不切换索引。
+- 停止条件：真实域名和 APK 未具备时只完成本地页面、客户端与测试；公共可达及覆盖安装由 P5 统一验证。若计划改为应用内下载或安装，先更新范围与平台权限约定。
+
+#### P4：反馈、分享及设置页集成
+
+- 产出：完成 F01 至 F04，并把更新结果和崩溃恢复入口接入同一套帮助流程。
+- 范围：新增 `K/support/FeedbackClient.kt`、`FeedbackDraftStore.kt`、`K/ui/SupportScreen.kt`、`SupportViewModel.kt` 及对应 `support/FeedbackClientTest.kt`、`FeedbackDraftStoreTest.kt`；新增 `app/src/androidTest/java/com/feiyu/notes/ui/SupportFlowTest.kt`。本项独占 `K/ui/SettingsScreen.kt`、`AppNavigation.kt`、`app/src/main/res/values/strings.xml`、`values-zh/strings.xml` 的支持功能修改，P1 完成后再修改 `FeiyuApp.kt` 的共享初始化。
+- 步骤：先用固定接口的测试替身实现页面、草稿和手动提交，再接入真实快照与客户端；发送中禁用重复提交，回执和重试遵循接口语义。草稿保存在私有目录，重建/重启后恢复；附带诊断默认关闭。崩溃提示由应用根界面展示，查看后进入反馈页，忽略只消除本次提示。分享将预览内容写入已有 `cache/exports/`，通过 FileProvider 授予临时读权限；专用诊断导出文件 24 小时后清理，不删除笔记导出文件。
+- 验证：覆盖描述为空、Unicode 长度边界、诊断开关决定请求内容、合法成功回执、超时后相同 ID 重试、409/413/429/503、返回坏 JSON、失败保留草稿和旋转不重发。UI 检查崩溃提示只出现一次、离线分享、无分享应用时复制兜底、中英文、大字号/深色及窄宽布局；复制与分享不谎报服务已收到。测试隔离诊断目录，FileProvider 仍不能读取凭据和私有原始日志。
+- 停止条件：最终联调等 P1/P2/P3；本地界面可先用替身开发。需要邮件自动发送、截图上传、联系方式或反馈查询时暂停这些新增部分并回到范围决策。
+
+#### P5：联调、版本收口与发布验收
+
+- 产出：所有 U/L/F 要求有证据，0.3.2 在无 GitHub 访问条件下能安装、检查更新、报错和分享。
+- 范围：独占 `app/build.gradle.kts` 的版本和正式端点配置、`.github/workflows/android.yml`、`.github/release-notes.md`、`README.md`、`README.en.md` 及本计划的验收记录。更新发布流程调用 P3 脚本，上传凭据仅放在发布环境，不进入 APK 或源码。
+- 步骤：先核对其他在途改动与版本号，串行完成客户端/服务联调；运行既有完整 CI 和服务单测的必要剩余检查，再构建并验签 release。正式部署先启动反馈服务，再上传 APK/页面，最后发布更新索引。现有 GitHub Release 发布与独立下载共用同一签名 APK，记录双渠道结果；镜像失败时旧索引保持可用。
+- 验证：`pwsh -NoProfile -File scripts/ci.ps1 -Full`；签名环境执行 `gradlew.bat assembleRelease lintVitalRelease --console=plain`，检查退出码、APK 产物、versionName/versionCode、applicationId、非 debuggable 和原证书一致。使用合成内容安装旧版再覆盖到 0.3.2，确认笔记、照片、加密 Key 和设置保留。真实目标网络屏蔽 GitHub 后完成独立下载及反馈回执；更新分支用测试索引模拟更高版本，不发布虚假版本。核对维护者能够按反馈编号取回该份报告，未勾选诊断时服务端确无诊断。真机测浏览器下载、系统确认安装和一个实际可用的分享目标。
+- 停止条件：本次只规划，不执行上述部署或发布；执行阶段缺少签名、域名、真机/目标网络时只挂起对应验收，不宣称 0.3.2 已完整交付。购买、邮件、Issue/评论等面向他人或付费操作须另列具体目的地、内容和费用并取得特定授权；本版没有这些必需步骤。
+
+回退：服务故障时客户端保留草稿并允许分享；禁用故障服务不影响离线笔记。更新索引可原子恢复上一份已验证内容以停止推荐坏包，但不会让已安装用户降级；客户端修复须发布更高 versionCode。反馈服务回滚须保留其数据库，清理只作用于已到期报告。任何客户端启动失败仍通过独立下载页提供修正版。
+
+### 依赖、写入归属与接续
+
+| 项目 | 实现依赖 | 验收依赖 |
+| --- | --- | --- |
+| P0 | 后续执行授权后可开始 | 用户提供或确认现有域名；实际环境与发布版本 |
+| P1 | 后续执行授权后可开始 | 自身单测；提示交互由 P4，完整崩溃恢复由 P5 收口 |
+| P2 | 本地代码按本节接口可开始；生产配置等 P0 | 客户端结合由 P5；代理与生产行为等部署环境 |
+| P3 | 本地代码/静态页可开始；正式主机配置等 P0 | P4 集成；真实下载及安装等 P5 |
+| P4 | 固定接口替身可先行；修改 FeiyuApp 等 P1 交接 | P1 快照、P2 接口、P3 更新模块全部交付后联调 |
+| P5 | P0 的正式值、P1 至 P4 的产物及执行/发布范围已明确 | 一个集成负责人串行运行最终 CI、真机与网络验收 |
+
+P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp、资源、设置页、版本和 workflow 按上述归属顺序编辑。所有写入者先保留现有用户改动；若他人正在修改同一文件，由集成负责人协调后再接入。模拟器、生产代理、发布目录和版本索引属于共享可变环境，集成检查和部署串行执行。
+
+窄检查由各项执行者负责，P5 只补跑未验证的组合及必要完整 CI；同一产物未变化时复用证据，不让每项重复跑全套。上述命令均为计划检查，本次只检查了文档和相关代码入口，未运行功能测试或部署。
+
+下次接续：先确认执行授权并处理 P0；同时可按既定接口启动 P1、P2/P3 本地实现。将完成的工作项、实际证据、待联调项和下一入口直接更新到本节，不另建平行计划。
+
 ## 执行记录
 
 ### 0.3 多图附件（2026-10-01）

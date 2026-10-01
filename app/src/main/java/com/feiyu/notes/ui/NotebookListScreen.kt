@@ -69,12 +69,8 @@ fun NotebookListScreen(
         },
     ) { padding ->
         LazyColumn(Modifier.padding(padding)) {
-            item(key = "general-chat") {
-                ListItem(headlineContent = { Text(context.getString(R.string.general_chat), style = MaterialTheme.typography.titleMedium) },
-                    supportingContent = { Text(context.getString(R.string.general_chat_hint)) },
-                    modifier = Modifier.testTag("general-chat").clickable { scope.launch { onGeneralChat(store.generalChat()) } })
-            }
             item(key = "welcome") { WelcomeCard(compact = true) }
+            item(key = "general-chat") { GeneralChatCard { scope.launch { onGeneralChat(store.generalChat()) } } }
             for (kind in NotebookKind.entries) {
                 val label = if (kind == NotebookKind.COURSE) context.getString(R.string.courses) else context.getString(R.string.practice_books)
                 item(key = "header-$kind") {
@@ -106,7 +102,8 @@ fun NotebookListScreen(
     creating?.let { kind ->
         NotebookDialog(
             title = if (kind == NotebookKind.COURSE) context.getString(R.string.new_course) else context.getString(R.string.new_practice),
-            initial = Notebook(0, kind, "", null, null, 0),
+            // New notebooks start with the preinstalled guided template while it exists.
+            initial = Notebook(0, kind, "", null, templates.orEmpty().firstOrNull { it.source == com.feiyu.notes.data.Template.BUILTIN_GUIDED }?.id, 0),
             courses = courses,
             templates = templates.orEmpty(),
             onConfirm = { draft ->

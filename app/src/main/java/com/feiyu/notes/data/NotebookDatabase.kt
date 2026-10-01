@@ -11,7 +11,7 @@ import android.database.sqlite.SQLiteOpenHelper
  * through parent_entry_id. template_id and source/attached ID lists deliberately have
  * no foreign key so the UI can show "已删除" for dangling references.
  */
-class NotebookDatabase(context: Context, name: String? = NAME) :
+class NotebookDatabase(private val context: Context, name: String? = NAME) :
     SQLiteOpenHelper(context, name, null, VERSION) {
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -25,7 +25,8 @@ class NotebookDatabase(context: Context, name: String? = NAME) :
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 instruction TEXT NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                source TEXT
             )
             """
         )
@@ -74,6 +75,14 @@ class NotebookDatabase(context: Context, name: String? = NAME) :
         db.execSQL("CREATE INDEX idx_lessons_notebook ON lessons(notebook_id)")
         db.execSQL("CREATE INDEX idx_entries_lesson ON entries(lesson_id)")
         db.execSQL("CREATE INDEX idx_entries_parent ON entries(parent_entry_id)")
+        seedGuidedTemplate(db)
+    }
+
+    /** Preinstalled, editable and deletable like any user template. */
+    private fun seedGuidedTemplate(db: SQLiteDatabase) {
+        db.execSQL("INSERT INTO templates(name, instruction, created_at, source) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(context.getString(com.feiyu.notes.R.string.guided_template_name),
+                com.feiyu.notes.study.StudyPrompts.GUIDED, System.currentTimeMillis(), Template.BUILTIN_GUIDED))
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -86,10 +95,14 @@ class NotebookDatabase(context: Context, name: String? = NAME) :
                 }
             }
         }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE templates ADD COLUMN source TEXT")
+            seedGuidedTemplate(db)
+        }
     }
 
     companion object {
         const val NAME = "notes.db"
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }

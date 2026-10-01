@@ -14,10 +14,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /** A private, bounded copy. No photo-library permission or long-lived external URI. */
-class AvatarFiles(root: File) {
+class AvatarFiles(root: File, name: String = "deepseek.png") {
     private val _revision = kotlinx.coroutines.flow.MutableStateFlow(0L)
     val revision: kotlinx.coroutines.flow.StateFlow<Long> = _revision
-    val file = File(root, "appearance/deepseek.png")
+    val file = File(root, "appearance/$name")
 
     suspend fun import(resolver: ContentResolver, uri: Uri) = withContext(Dispatchers.IO) {
         file.parentFile!!.mkdirs()

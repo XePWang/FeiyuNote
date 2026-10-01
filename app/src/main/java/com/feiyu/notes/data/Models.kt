@@ -60,4 +60,10 @@ data class Template(
     val name: String,
     val instruction: String,
     val createdAt: Long,
-)
+    /** null = written by the user; [BUILTIN_GUIDED] = preinstalled; otherwise the Skill's source URL. */
+    val source: String? = null,
+) {
+    val isSkill: Boolean get() = source != null && source != BUILTIN_GUIDED
+
+    companion object { const val BUILTIN_GUIDED = "builtin:guided" }
+}

@@ -35,6 +35,19 @@ class AppPrefs(context: Context, name: String = NAME) {
         _display.value = value
     }
 
+    fun prompt(kind: com.feiyu.notes.study.PromptKind): String =
+        prefs.getString("prompt_${kind.name}", null)?.takeIf { it.isNotBlank() } ?: kind.default
+
+    fun isPromptCustom(kind: com.feiyu.notes.study.PromptKind): Boolean = prefs.contains("prompt_${kind.name}")
+
+    /** Blank or unchanged text restores the built-in default. */
+    fun setPrompt(kind: com.feiyu.notes.study.PromptKind, text: String?) {
+        val value = text?.trim().orEmpty()
+        prefs.edit().apply {
+            if (value.isEmpty() || value == kind.default) remove("prompt_${kind.name}") else putString("prompt_${kind.name}", value)
+        }.apply()
+    }
+
     private val _modelRevision = MutableStateFlow(0L)
     val modelRevision = _modelRevision.asStateFlow()
 

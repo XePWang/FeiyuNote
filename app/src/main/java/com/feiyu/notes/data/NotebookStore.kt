@@ -293,11 +293,15 @@ class NotebookStore(
         if (template.id == 0L) {
             val now = clock()
             values.put("created_at", now)
+            values.put("source", template.source) // origin is fixed at creation; edits keep it
             template.copy(id = insert("templates", values), createdAt = now)
         } else {
-            if (update("templates", template.id, values) == 1) template else null
+            if (update("templates", template.id, values) == 1) template.copy(source = templateSource(template.id)) else null
         }
     }
+
+    private fun SQLiteDatabase.templateSource(id: Long): String? =
+        query("SELECT * FROM templates WHERE id = ?", id) { it.toTemplate() }.firstOrNull()?.source
 
     /** Notebooks using it as default fall back to none (FK ON DELETE SET NULL). */
     suspend fun deleteTemplate(id: Long): Boolean = write {
@@ -385,7 +389,7 @@ class NotebookStore(
 
     private fun Cursor.toLesson() = Lesson(long("id")!!, long("notebook_id")!!, str("title")!!, long("created_at")!!)
 
-    private fun Cursor.toTemplate() = Template(long("id")!!, str("name")!!, str("instruction")!!, long("created_at")!!)
+    private fun Cursor.toTemplate() = Template(long("id")!!, str("name")!!, str("instruction")!!, long("created_at")!!, str("source"))
 
     private fun Cursor.toEntry() = Entry(
         id = long("id")!!,

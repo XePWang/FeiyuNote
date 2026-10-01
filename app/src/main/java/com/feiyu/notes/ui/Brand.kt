@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,10 +77,50 @@ fun WelcomeCard(compact: Boolean = false) {
     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.large,
         modifier = Modifier.padding(16.dp).fillMaxWidth()) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Image(painterResource(R.drawable.whale_02_01), null, Modifier.size(if (compact) 64.dp else 88.dp).clip(CircleShape))
+            CustomImage(context.app.welcomeImage, R.drawable.whale_02_01, Modifier.size(if (compact) 64.dp else 88.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(context.getString(R.string.welcome_title), style = MaterialTheme.typography.titleMedium)
                 Text(context.getString(if (compact) R.string.welcome_short else R.string.welcome_body), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+/** A user-replaceable illustration (Settings > Home illustrations), falling back to [default]. */
+@Composable
+fun CustomImage(files: com.feiyu.notes.settings.AvatarFiles, @DrawableRes default: Int, modifier: Modifier) {
+    val revision by files.revision.collectAsStateWithLifecycle()
+    val custom by produceState<ImageBitmap?>(null, files, revision) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { android.graphics.BitmapFactory.decodeFile(files.file.path)?.asImageBitmap() }.getOrNull()
+        }
+    }
+    val shape = modifier.clip(CircleShape)
+    if (custom != null) Image(custom!!, null, shape, contentScale = ContentScale.Crop)
+    else Image(painterResource(default), null, shape, contentScale = ContentScale.Crop)
+}
+
+/** Home entry to the pinned general chat; styled as a call to action, not as background. */
+@Composable
+fun GeneralChatCard(onClick: () -> Unit) {
+    val context = LocalContext.current
+    ElevatedCard(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().testTag("general-chat"),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            CustomImage(context.app.chatImage, R.drawable.whale_01_07, Modifier.size(72.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shape = CircleShape) {
+                    Text(context.getString(R.string.general_chat_tag), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
+                }
+                Text(context.getString(R.string.general_chat), style = MaterialTheme.typography.titleMedium)
+                Text(context.getString(R.string.general_chat_hint), style = MaterialTheme.typography.bodySmall)
+            }
+            Surface(color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shape = CircleShape) {
+                Icon(painterResource(R.drawable.ic_send), context.getString(R.string.start_chat), Modifier.padding(12.dp).size(20.dp))
             }
         }
     }
