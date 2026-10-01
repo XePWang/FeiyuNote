@@ -9,6 +9,8 @@
     <string name="lesson_deleted">This session was deleted.</string>
     <string name="lesson_notes">Session notes</string>
     <string name="summary_template">Summarize: choose a template</string>
+    <string name="summarize_chat">Summarize chat</string>
+    <string name="summary_template_chat">Summarize chat: choose a template</string>
     <string name="summary_default">No template (built-in instructions)</string>
     <string name="start_summary">Create notes</string>
     <string name="retry_template">The original template was deleted. Choose another or continue without one.</string>

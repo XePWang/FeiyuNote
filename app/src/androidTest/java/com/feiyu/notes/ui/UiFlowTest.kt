@@ -416,7 +416,8 @@ class UiFlowTest {
         screenshot("home-general-chat")
         compose.onNodeWithTag("general-chat").performClick()
         waitText("想聊什么都可以，直接在下方输入；也可以拍照或从相册选图来问。") // chat banner, not the study one
-        waitText("deepseek-flash · Low")
+        waitText("dsf.low")
+        waitText("整理对话")
         ask("第一问")
         awaitAnswer("答案1")
         ask("第二问")
@@ -436,7 +437,7 @@ class UiFlowTest {
         assertEquals(2, inputs.size)
 
         app.prefs.setSessionModel(com.feiyu.notes.data.NotebookStore.GENERAL_ID, com.feiyu.notes.ai.ModelChoice("deepseek-flash", "high"))
-        waitText("deepseek-flash · High")
+        waitText("dsf.high")
         compose.onNodeWithTag("send").performClick()
         hideKeyboard()
         awaitAnswer("答案3")

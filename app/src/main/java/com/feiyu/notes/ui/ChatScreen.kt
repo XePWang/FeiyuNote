@@ -93,6 +93,7 @@ fun ChatScreen(
     var summarizing by rememberSaveable { mutableStateOf(false) }
     var retryTemplateFor by rememberSaveable { mutableStateOf<Long?>(null) }
     val d = data
+    val general = vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID
 
     Scaffold(
         topBar = {
@@ -100,7 +101,7 @@ fun ChatScreen(
                 title = { Text(d?.lesson?.let { lessonTitle(context, it) } ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
                 actions = {
-                    TextButton(enabled = d?.lesson != null && status.running == null, onClick = { summarizing = true }) { Text(context.getString(R.string.summarize)) }
+                    TextButton(enabled = d?.lesson != null && status.running == null, onClick = { summarizing = true }) { Text(context.getString(if (general) R.string.summarize_chat else R.string.summarize)) }
                     TextButton(enabled = d?.lesson != null, onClick = onOpenArchived) { Text(context.getString(R.string.archived)) }
                 },
             )
@@ -135,7 +136,7 @@ fun ChatScreen(
                     Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
                     LazyColumn(Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("chat-list"), state = listState) {
                         item(key = "notes") {
-                            if (rows.isEmpty() && notes.isEmpty()) WelcomeCard(general = vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID)
+                            if (rows.isEmpty() && notes.isEmpty()) WelcomeCard(general = general)
                             if (notes.isNotEmpty()) Text(context.getString(R.string.lesson_notes), Modifier.padding(16.dp, 8.dp), style = MaterialTheme.typography.titleSmall)
                         }
                         items(notes, key = { "note-${it.id}" }) { note ->
@@ -177,7 +178,7 @@ fun ChatScreen(
     }
 
     if (summarizing && d != null) ChoiceDialog(
-        title = context.getString(R.string.summary_template),
+        title = context.getString(if (vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) R.string.summary_template_chat else R.string.summary_template),
         options = d.templates.map { it.id to it.name },
         selected = null,
         noneLabel = context.getString(R.string.summary_default),

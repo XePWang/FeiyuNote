@@ -9,6 +9,8 @@
     <string name="lesson_deleted">该课次已被删除</string>
     <string name="lesson_notes">本课笔记</string>
     <string name="summary_template">整理本课：选择模板</string>
+    <string name="summarize_chat">整理对话</string>
+    <string name="summary_template_chat">整理对话：选择模板</string>
     <string name="summary_default">不用模板（内置整理指令）</string>
     <string name="start_summary">开始整理</string>
     <string name="retry_template">原模板已删除：请重新选择模板或不用模板</string>

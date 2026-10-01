@@ -173,7 +173,9 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - P1 已完成本地部分：`K/support/DiagnosticModels.kt`、`Diagnostics.kt`，已接入 `FeiyuApp`（每进程安装一次崩溃处理器，测试环境切换时读取当前实例）、`Generator`（问答/整理的成功、取消、失败及耗时）、连接测试、图片导入、笔记导出与分享。`AiError.TooLarge` 的 code 改为属性，供错误分类使用。`DiagnosticsTest` 9 项通过：合成 Key/正文/URL/路径不进入快照、7 天过期、1 MiB 上限、快照截断后仍可解析、并发写入、磁盘失败不抛错，崩溃处理器在写入失败时仍调用原处理器、因果链与帧数上限。崩溃处理器只在 JVM 中直接调用验证，真实进程崩溃后的下次启动提示待 P4 界面接入后验证。
 - 全部 JVM 单测 48 项通过，`assembleDebugAndroidTest` 编译通过。0.3.1 CI 当时占用 emulator-5556，因此本分支还没跑仪器/界面测试。
 - 新增需求：反馈页显示 QQ 群 1079399140 作为讨论渠道（spec F04），由 P4 实现。
-- 下一步：P4 反馈客户端、草稿、支持页与设置入口、崩溃提示和 QQ 群显示；随后 rebase 到最新 main，在模拟器空闲时跑 `scripts/ci.ps1 -Full`。
+- 0.3.1 遗留问题并入 0.3.2：会话模型标签缩写为 `dsf.low` 这类形式（读屏仍读完整名称），窄屏输入区不再换行；公共聊天顶栏和模板选择标题改为“整理对话”；问答历史超过 60,000 字符时只发送最近的部分（`ContextBuilder.HISTORY_CHAR_BUDGET`）。新增 `ModelLabelTest` 和 `ContextBuilderTest` 的长历史用例；界面测试改为断言新标签与“整理对话”。Skill 的真实 GitHub 安装暂不验证，长期方向是框架内 Skill（spec §10）。
+- 已 rebase 到 `bc33554`（0.3.1 最终提交）。CI 去重：完整 CI 通过后把测试过的 tree 写入 `build/ci/full-passed`；pre-push 钩子发现推送的提交与它只差 Markdown 时跳过；远端推送到 main 只跑 `assembleDebug`，PR 和 tag 仍跑单测。
+- 下一步：P4 反馈客户端、草稿、支持页与设置入口、崩溃提示和 QQ 群显示。
 
 ## 执行记录
 

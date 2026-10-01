@@ -9,6 +9,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.feiyu.notes.R
@@ -59,6 +61,13 @@ fun ModelChoiceFields(choice: ModelChoice, onChange: (ModelChoice) -> Unit, mode
         Text(context.getString(R.string.text_only_model), style = MaterialTheme.typography.bodySmall)
 }
 
+/** Compact composer label: `deepseek-flash` + low → `dsf.low`; other model ids stay as they are. */
+internal fun shortModelLabel(choice: ModelChoice): String {
+    val rest = choice.model.removePrefix("deepseek-")
+    val model = if (rest == choice.model || rest.isEmpty()) choice.model else "ds" + rest.split('-').filter { it.isNotEmpty() }.joinToString("") { it.take(1) }
+    return "$model.${choice.effort.lowercase()}"
+}
+
 /** Provider-listed tiers in provider order, else the official low/high/max. */
 internal fun effortLevels(model: AiModel?): List<String> = model?.efforts.orEmpty().distinct().ifEmpty { AiDefaults.EFFORTS }
 
@@ -104,8 +113,13 @@ fun SessionModel(lessonId: Long, busy: Boolean) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var model by rememberSaveable(current) { mutableStateOf(current.model) }
     var effort by rememberSaveable(current) { mutableStateOf(current.effort) }
-    TextButton(enabled = !busy, onClick = { model = current.model; effort = current.effort; editing = true }, modifier = Modifier.testTag("session-model")) {
-        Text("${current.model} · ${current.effort.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelLarge)
+    val fullName = "${current.model} · ${current.effort.replaceFirstChar { it.uppercase() }}"
+    TextButton(
+        enabled = !busy,
+        onClick = { model = current.model; effort = current.effort; editing = true },
+        modifier = Modifier.testTag("session-model").semantics(mergeDescendants = true) { contentDescription = fullName },
+    ) {
+        Text(shortModelLabel(current), maxLines = 1, style = MaterialTheme.typography.labelLarge)
     }
     if (editing) AlertDialog(onDismissRequest = { editing = false }, title = { Text(context.getString(R.string.session_model)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState())) {

@@ -58,7 +58,7 @@ pwsh -NoProfile -File scripts/ci.ps1 -Full
 
 On Windows, run `pwsh -File scripts/setup-sdk.ps1` to install or repair the SDK. Add `-WithEmulator` for full CI to create or reuse `Feiyu_CI_API36`. The SDK defaults to `%LOCALAPPDATA%\Android\Sdk`; CI defaults to `emulator-5556` and accepts only emulator targets.
 
-Local full CI uses isolated data and mock responses without paid API calls. Screenshots are saved in `build/ci/screenshots/`. Enable optional Git hooks with `git config core.hooksPath .githooks`.
+Local full CI uses isolated data and mock responses without paid API calls. Screenshots are saved in `build/ci/screenshots/`. Enable optional Git hooks with `git config core.hooksPath .githooks`: fast CI before each commit, full CI before each push, skipped when the pushed content differs from the last passing full run only in Markdown files. Remote CI only checks the build on pushes to main; pull requests and release tags also run the unit tests.
 
 GitHub Actions runs unit tests and debug builds for PRs targeting main and pushes to main, with read-only permissions. A `v*` tag and a successful build trigger a separate job to sign and publish a prerelease using repository Secrets. See the [workflow](.github/workflows/android.yml). Signed local builds require `FEIYU_KEYSTORE` and `FEIYU_KEY_PASSWORD` (alias `feiyu`); never commit signing keys.
 

@@ -1,3 +1,15 @@
 #!/bin/sh
 # Full CI: fast + instrumented/UI tests on the isolated emulator-5556 (started headless if needed).
+# Skipped when every pushed commit differs from the tree a previous full run passed (build/ci/full-passed)
+# only in Markdown files.
+stamp=$(cat build/ci/full-passed 2>/dev/null)
+reuse=$stamp
+while read -r local_ref local_sha remote_ref remote_sha; do
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac # branch deletion: nothing to test
+    [ -n "$stamp" ] && git diff --quiet "$stamp" "$local_sha^{tree}" -- . ':(exclude)*.md' 2>/dev/null || reuse=
+done
+if [ -n "$reuse" ]; then
+    echo "Full CI already passed for tree $stamp; skipping."
+    exit 0
+fi
 exec pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/ci.ps1 -Full

@@ -58,7 +58,7 @@ pwsh -NoProfile -File scripts/ci.ps1 -Full
 
 Windows 首次配置或 SDK 缺失时运行 `pwsh -File scripts/setup-sdk.ps1`；需要完整 CI 时加 `-WithEmulator`，创建或复用 `Feiyu_CI_API36`。SDK 默认位于 `%LOCALAPPDATA%\Android\Sdk`；CI 默认使用 `emulator-5556`，只接受模拟器目标。
 
-本地完整 CI 使用隔离数据和模拟回答，不调用计费接口；截图位于 `build/ci/screenshots/`。可通过 `git config core.hooksPath .githooks` 启用 Git 钩子。
+本地完整 CI 使用隔离数据和模拟回答，不调用计费接口；截图位于 `build/ci/screenshots/`。可通过 `git config core.hooksPath .githooks` 启用 Git 钩子：提交前运行快速 CI，推送前运行完整 CI；如果推送内容与上次完整 CI 通过的版本相比只改了 Markdown，则跳过。推送到 main 后，远端只检查能否构建；PR 和发布 tag 仍会运行单测。
 
 GitHub Actions 对指向 main 的 PR 及 main 推送运行单测和 debug 构建，使用只读权限。推送 `v*` 标签且构建通过后，独立任务使用仓库 Secrets 签名并发布预览版。详见[构建流程](.github/workflows/android.yml)。本地签名 release 构建需配置 `FEIYU_KEYSTORE` 与 `FEIYU_KEY_PASSWORD`（别名 `feiyu`），勿提交密钥。
 
