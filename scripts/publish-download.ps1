@@ -17,6 +17,8 @@ param(
     [Parameter(Mandatory)] [string]$NotesEn,
     # A local directory, or ssh-host:/absolute/remote/dir
     [Parameter(Mandatory)] [string]$Destination,
+    # Validated: a stray unquoted argument (e.g. curly quotes in the notes) must not land here.
+    [ValidatePattern('^https://[A-Za-z0-9.-]+$')]
     [string]$BaseUrl = 'https://feiyunote.cangming.fyi'
 )
 $ErrorActionPreference = 'Stop'
@@ -96,7 +98,8 @@ try {
             "cp '$remoteStage/updates/android.json' '$dir/updates/.android.json.tmp' && mv -f '$dir/updates/.android.json.tmp' '$dir/updates/android.json'"
             "rm -rf '$remoteStage'"
         ) -join "`n"
-        $switch | & ssh $sshHost 'sh -s'
+        # Passed as the remote command, not via stdin: piping from PowerShell appends CR to the last line.
+        & ssh $sshHost $switch
         if ($LASTEXITCODE -ne 0) { throw 'remote switch failed; check which files were replaced before retrying' }
     } else {
         $feiyu = Join-Path $Destination 'feiyu'

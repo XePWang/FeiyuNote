@@ -178,7 +178,22 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - P4 已完成：`K/support/FeedbackClient.kt`、`FeedbackDraftStore.kt`、`K/ui/SupportScreen.kt`、`SupportViewModel.kt`；设置页新增“关于与帮助”入口，应用根部负责崩溃提示，反馈页显示 QQ 群 1079399140。预览时冻结请求体，重试沿用同一个 submissionId；修改内容后生成新 ID；超过 30 天的未确认提交需要重新预览。分享时把文本写入 `cache/exports/feiyu-feedback-*.txt`（超过 24 小时自动清理），没有可接收的应用时改为复制。`FeedbackClientTest` 11 项覆盖请求体、码点上限、200/201 回执、各错误码与 Retry-After、8 KiB 上限、发出后超时只发一次、断连、无法连接、非白名单和草稿读写；`UiFlowTest` 新增两条界面流程：检查更新，未确认后重建 Activity 再重试且 ID 不变；崩溃提示进入反馈并附带诊断、分享交给其他应用、提交内容不含异常消息、再次启动不再提示。
 - 界面测试修正：输入后先收起键盘再点击；诊断内容很长时“分享”按钮会被挤出可见区域，因此分享和复制按钮移到诊断内容上方。
 - P5：版本改为 0.3.2（versionCode 7），更新 release notes 和中英 README。完整 CI 通过：JVM 60 项，仪器/界面 `OK (37 tests)`，通过记录 tree `146e755`。
+- 发布问题与修正：第一次发布时，中文弯引号 `“”` 被 PowerShell 当成参数引号，说明文字的后半段落进了 `-BaseUrl`，版本索引里的 `downloadPageUrl` 因此出错。应用会拒绝白名单外的地址，只会显示检查失败。已改用「」重新发布，并给 `-BaseUrl` 加了 https 格式校验。另外，通过管道把脚本传给 ssh 时，最后一行多了 CR，暂存目录没被清理；现在远端命令改为作为 ssh 参数传递，重新发布后确认没有遗留。
 - 部署（2026-10-01，用户授权随 0.3.2 一起部署）：VPS 新增系统用户 `feiyu-feedback`，服务 `/opt/feiyu-feedback/server.py` 监听 127.0.0.1:8787，数据库 `/var/lib/feiyu-feedback/`（0700），每日清理 timer 已启用。Caddy 站点块由 vps-management 维护（`caddy/feiyunote.caddy`，提交 `b62ec80`、`abdb4b1`）：以 caddy 用户校验后通过 admin API reload（该单元没有 ExecReload）。HTTPS 证书已签发；根路径 302 跳到 `/feiyu/`；反馈路径不写访问日志（访问日志中计数为 0）；原有 `vps`、`groceries`、`cpr` 站点仍为 200。仓库内的 Caddy 样例已删除，改为指向 vps-management。
+
+## 1.0 稳定开发目标
+
+日期：2026-10-01。状态：已确定方向，尚未完成版本验收，发布日期未定。1.0 聚焦现有 Android 应用的稳定开发，围绕可拍照的手机、平板与折叠屏，打磨拍照采集和随手记录的日常使用流程。产品范围见 [spec §10](spec.md#10-后续方向)，0.3.2 按既定计划推进。
+
+- 持续修复实际使用中的崩溃、数据丢失和交互问题，完善拍照、选图、输入、保存与回看流程；随手记录入口的具体改进按试用反馈确定。
+- 沿用现有 Kotlin/Compose 与 Android 工程，优先保障已有笔记、图片、设置及版本升级兼容性。
+- 1.0 验收以核心学习流程回归和真机试用为依据：拍照或选图后能完成记录与提问，重启后内容仍可读取，断网、取消和请求失败不损坏已保存内容，离线阅读、公式显示与 HTML 导出可用。发布前收口影响核心流程的已知问题，并记录实际验证结果。
+
+## 2.0 iOS 长期目标
+
+2.0 长期目标为支持 iOS，延续拍照采集、随手记录与本地学习笔记的产品方向。当前尚未启动，发布日期未定；用户已有 Mac，可供后续开发验证。
+
+实施前再评估 Kotlin Multiplatform / Compose Multiplatform 的复用范围，以及相机、图片、存储、凭据和公式渲染的适配方式，确定支持设备与验收条件。跨设备同步单独确定范围。
 
 ## 执行记录
 
@@ -204,6 +219,7 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 
 | 版本 / 提交 | 验证证据 |
 | --- | --- |
+| [v0.3.2](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.2) · `a15aa06` | 本地完整 CI（JVM 60 项 + 37 项仪器/界面测试）、[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36910541403)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36910554851) 通过。Release APK 已下载验签：证书 SHA-256 `10caccf5…d88b` 与 0.3.1 一致，versionCode 7、versionName 0.3.2，可覆盖安装。同一 APK 已发布到独立下载页，四项线上检查通过：裸域名 https/http 均跳到 `/feiyu/`、下载页、APK（字节与 Release 一致，MIME 为 APK）、版本索引（0.3.2/7，下载页地址正确，no-cache）。正式反馈接口实测：首次 201、同 ID 重试 200 且编号相同，维护者按编号取回 `b530317f-…` 合成报告（30 天后自动清理），访问日志中反馈路径 0 条。真机下载安装与应用内检查更新尚待人工确认。 |
 | [v0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1) · `a40627a` | 同版本覆盖发布：首发 `cd1afdf`（versionCode 4）后，按用户要求将公共聊天卡片与专属横幅、可替换首页插图、预装引导式讲解模板、内置提示词编辑与 Skill 文字导入并入 0.3.1；每次覆盖都删除原 Release、移动 tag 并升 versionCode，当前为 6。本地完整 CI（JVM 单测 + 35 项仪器/界面测试，含数据库 v3 迁移、内置提示词覆盖、公共聊天横幅/编号/跳转/会话 effort）、[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36903801704)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36903803186) 通过。实际 Release APK 已下载验签，证书与 0.3.0 一致，versionCode 6、versionName 0.3.1、非 debuggable。TB321FU 与 PHP110 均已覆盖安装 versionCode 6，PHP110 首页与公共聊天横幅显示正常。Skill 网络导入仅有 URL/解析单测，未连真实 GitHub 验证。 |
 | [v0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0) · `0f440de` | [main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36884434892)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36884438952) 通过。实际 Release APK 已下载验签，包名 `com.feiyu.notes`、versionCode 3、versionName 0.3.0、debuggable=false。TB321FU 已安装；手机安装与真机界面检查待系统交互，见 Wayfinder。 |
 | [v0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1) · `9fd23ea` | [main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36784905890)、[发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/36785654962) 通过，签名预览 APK 已发布。 |
