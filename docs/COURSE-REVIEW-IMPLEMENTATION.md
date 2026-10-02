@@ -150,12 +150,14 @@ bash ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --consol
   - 设备型号：SHARP A101SH（Android 12 / API 31，serial `354xxx644` 脱敏）。
   - 环境变量配置：`ADB_SERVER_SOCKET=tcp:127.0.0.1:5038`。
 - **真机已实测项**：
-  - **核心用例累计（跨阶段测试类汇总）**：**共 51 项调度用例：49 通过、2 跳过、0 失败**
-    - `com.feiyu.notes.data.NotebookStoreTest` (26 项) + `com.feiyu.notes.study.GeneratorTest` (8 项) 在开发机上执行 `am instrument` 全部通过（前轮阶段验证）。
+  - **合并上游 `bbefb79` 后主套件单次全量执行**：**共 51 项调度用例：49 通过、2 跳过、0 失败**
+    - 日志文件：`build/course-review-validation/device-test-354xxx644-data_NotebookStoreTest_study_GeneratorTest_ui_UiFlowTest-e9513fd-20261002_082717.log`
+    - `com.feiyu.notes.data.NotebookStoreTest`（26 项全部通过）：包含真实 SQLite 下 v1/v2/v3→v4 升级迁移、GENERAL_ID 排除、跨课隔离防篡改、空白拦截、级联标记等；
+    - `com.feiyu.notes.study.GeneratorTest`（8 项全部通过）：生成重试、模板删除选择、多图保留与取消处理；
     - `com.feiyu.notes.ui.UiFlowTest`（17 项调度：15 通过，2 跳过，0 失败，在移除 debug 锁屏配置后的最新构建上完整实测）：
-      - 验证了问答、笔记、归档三种来源加入复习与返回栈闭环。
-      - 验证了编辑对话框长文本输入与键盘收起、重建草稿保留。
-      - 验证了来源删除后“来源已删除”红色徽标展示与跳转安全拦截。
+      - 验证了问答、笔记、归档三种来源加入复习与返回栈闭环；
+      - 验证了编辑对话框长文本输入与键盘收起、重建草稿保留；
+      - 验证了来源删除后“来源已删除”红色徽标展示与跳转安全拦截；
       - 2 项测试如实记录跳过：`layoutAdaptsToWindowWidthAndKeepsDraft`（直板物理机不适用折叠屏 `wm size`）与 `nonChineseLanguageUsesEnglishAndChineseUsesChinese`（API 31 不支持 Android 13 LocaleManager）。
   - **辅助组件测试核验说明**：早期阶段报告曾记录 [`MathRendererTest`](../app/src/androidTest/java/com/feiyu/notes/math/MathRendererTest.kt) (1 项) 与 [`ApiSettingsTest`](../app/src/androidTest/java/com/feiyu/notes/settings/ApiSettingsTest.kt) (2 项)。因归档中暂无对应独立的原始 runner 日志，按严谨原则从已确认总计中移出，标注为“历史阶段声称，当前未独立归档日志，不纳入最终已验证统计”。
 - **开发机验证脚本与一键运行入口**：
@@ -274,14 +276,18 @@ body:
 
 ## 7. 上游主线状态与集成分析 (Upstream Status)
 
-在完成 fork 本地开发后，只读核对上游仓库主线状态：
-- **上游主线分支**：`upstream/main` (`refs/heads/main` 位于提交 `bbefb7931d03e6d9e5d4daf2a44cbca07fc63bbb`)；
-- **本次合并基线**：上游 `v0.3.2` 发布标签（提交 `a15aa06c084f129eee494ff79e72faa216ec8b30`）；
-- **上游增量提交**：仅有 2 项提交（`0e9c405` 与 `bbefb79`），改动仅涉及文档（`README.md`, `ROADMAP.md`, `agents.md`）与打包脚本（`scripts/publish-download.ps1`）；
-- **冲突评估**：上游 `main` 与本次功能分支在应用代码（`app/`）、数据库 schema（`NotebookDatabase.kt`）及构建脚本上**完全零冲突**；
+在完成 fork 本地开发后，已将上游仓库主线新增提交完整合入：
+- **上游主线目标**：`upstream/main` (`refs/heads/main` 位于提交 `bbefb7931d03e6d9e5d4daf2a44cbca07fc63bbb`)；
+- **合并前本地基准**：提交 `1af8e70`；
+- **合入的上游提交**：
+  - `0e9c405`：`fix(publish): validate BaseUrl and run the remote switch as an ssh argument; record 0.3.2 release`
+  - `bbefb79`：`docs: record Android 1.0 and iOS 2.0 goals`
+- **合并提交**：`e9513fd4132ca45f7ac81486464b54617f22015d`；
+- **冲突评估与处理**：上游修改仅涉及文档与打包脚本，与本次应用代码（`app/`）及数据库迁移完全零冲突，双方文档与课程复习实现完整保留；
+- **合并后统一验证**：合并后统一执行 JVM 单测（76/76 全部通过）、离线脚本测试（11/11 全部通过）及真机全量套件（51 项：49 通过、2 跳过、0 失败），全部保持绿色；
 - **PR 目标规划**：
   - PR 目标为 `Yongzhaooo/FeiyuNote:main` ← `XePWang/FeiyuNote:feat/course-review-records`；
-  - 无需对已推送分支执行变基或强推，保持清晰可追溯的合并与功能提交历史。
+  - 当前功能分支已完全包含上游最新主线提交，领先 1 个合并提交与复习功能提交，落后 0 个提交。
 
 ---
 
