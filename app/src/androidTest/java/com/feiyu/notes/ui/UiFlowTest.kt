@@ -584,6 +584,7 @@ class UiFlowTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("review-topic-input").performTextClearance()
         compose.onNodeWithTag("review-topic-input").performTextInput("泰勒展开式")
+        screenshot("course-review-dialog")
         compose.onNodeWithText("保存").performClick()
         waitText("已加入复习")
 
@@ -601,6 +602,7 @@ class UiFlowTest {
         compose.onNodeWithTag("record-status-chip").performClick()
         compose.onNodeWithTag("status-menu-item-understood").performClick()
         waitText("已理解")
+        screenshot("course-review-list")
 
         // Zero model calls incurred by review interactions
         assertEquals(initialRequests, inputs.size)
@@ -642,6 +644,7 @@ class UiFlowTest {
         waitText("导出 HTML")
 
         // Click "加入复习" in NoteScreen
+        screenshot("course-review-note-add")
         compose.onNodeWithTag("note-add-to-review").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("review-dialog-save").performClick()
@@ -735,6 +738,7 @@ class UiFlowTest {
         systemBack()
         waitText("课程复习")
         waitText("来源已删除")
+        screenshot("course-review-source-deleted")
         assertTrue("jump button must be removed when source is deleted", compose.onAllNodesWithTag("jump-to-source").fetchSemanticsNodes().isEmpty())
 
         // Delete the review record

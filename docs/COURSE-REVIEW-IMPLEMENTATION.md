@@ -328,3 +328,11 @@ body:
 - **问题 1**：在实际听课或课后复习中，你是否愿意再次使用「课程复习」功能？
 - **问题 2**：在问答/笔记中点击「加入复习」以及在列表中「回到来源」是否感到顺畅、不费力？
 - **问题 3**：课程复习页的“待复习 / 已理解 / 仍有疑问”状态切换，是否切实帮助你定位到仍需弄懂的内容？
+
+### 8.4 真机实际运行截图 (SHARP A101SH, Android 12)
+
+| 1. 问答加入复习弹窗 | 2. 课程复习记录列表 |
+| :---: | :---: |
+| ![加入复习弹窗](screenshots/course-review-dialog.png) | ![课程复习列表](screenshots/course-review-list.png) |
+| **3. 整理笔记加入复习** | **4. 来源删除失效保护** |
+| ![笔记加入复习](screenshots/course-review-note-add.png) | ![来源删除失效保护](screenshots/course-review-source-deleted.png) |

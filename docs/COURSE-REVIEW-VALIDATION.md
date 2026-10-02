@@ -144,3 +144,11 @@ ADB_SERVER_SOCKET=tcp:127.0.0.1:5038 ./scripts/verify-course-review.sh -s <你�
   - 是否愿意再次使用？
   - 添加记录与找来源是否费力？
   - 课程复习页是否切实帮助定位仍有疑问的内容？
+
+### 3.4 真机实际运行截图 (SHARP A101SH, Android 12)
+
+| 1. 问答加入复习弹窗 | 2. 课程复习记录列表 |
+| :---: | :---: |
+| ![加入复习弹窗](screenshots/course-review-dialog.png) | ![课程复习列表](screenshots/course-review-list.png) |
+| **3. 整理笔记加入复习** | **4. 来源删除失效保护** |
+| ![笔记加入复习](screenshots/course-review-note-add.png) | ![来源删除失效保护](screenshots/course-review-source-deleted.png) |
