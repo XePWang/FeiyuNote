@@ -441,7 +441,9 @@ class NotebookStoreTest {
         val lesson1 = store.createLesson(course.id, "Mechanics")!!
         val lesson2 = store.createLesson(course.id, "Optics")!!
         val (q1, a1) = ask(lesson1.id, "Newton's laws")
+        store.commitReply(a1.id, "Newton's first law text", EntryState.COMPLETE)
         val (q2, a2) = ask(lesson2.id, "Refraction")
+        store.commitReply(a2.id, "Snell's law text", EntryState.COMPLETE)
         val note = store.commitSummary(lesson1.id, "Summary note", emptyList(), null)!!
 
         val record1 = store.addReviewRecord(course.id, "Newton", "Law 1", sourceEntryId = a1.id)!!

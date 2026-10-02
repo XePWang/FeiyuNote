@@ -66,8 +66,10 @@ class UiFlowTest {
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val app = instrumentation.targetContext.applicationContext as FeiyuApp
-    private val localeManager = app.getSystemService(android.app.LocaleManager::class.java)
-    private lateinit var originalLocales: android.os.LocaleList
+    private val localeManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        app.getSystemService(android.app.LocaleManager::class.java)
+    } else null
+    private var originalLocales: android.os.LocaleList? = null
     private val root = File(app.filesDir, "ui-test")
     private val inputs: MutableList<AiInput> = Collections.synchronizedList(mutableListOf())
     private val configs: MutableList<AiConfig> = Collections.synchronizedList(mutableListOf())
@@ -81,8 +83,12 @@ class UiFlowTest {
     }
 
     @Before fun setUp() {
-        originalLocales = localeManager.applicationLocales
-        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("zh-CN")
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            localeManager?.let {
+                originalLocales = it.applicationLocales
+                it.applicationLocales = android.os.LocaleList.forLanguageTags("zh-CN")
+            }
+        }
         app.deleteDatabase(FeiyuApp.TEST_DATABASE)
         app.getSharedPreferences(FeiyuApp.TEST_PREFS, 0).edit().clear().commit()
         app.getSharedPreferences(FeiyuApp.TEST_API_PREFS, 0).edit().clear().commit()
@@ -94,7 +100,9 @@ class UiFlowTest {
 
     @After fun tearDown() {
         scenario?.close()
-        localeManager.applicationLocales = originalLocales
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            originalLocales?.let { localeManager?.applicationLocales = it }
+        }
         Intents.release()
         shell("wm size reset")
         app.restoreProductionEnvironment()
@@ -392,9 +400,13 @@ class UiFlowTest {
     }
 
     @Test fun nonChineseLanguageUsesEnglishAndChineseUsesChinese() {
+        org.junit.Assume.assumeTrue(
+            "Per-app language switching requires API 33+",
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+        )
         // A German primary language must not pick Chinese from the secondary preference.
         scenario!!.close()
-        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("de-DE,zh-CN")
+        localeManager!!.applicationLocales = android.os.LocaleList.forLanguageTags("de-DE,zh-CN")
         launch()
         waitText("Feiyu Notes")
         click("New course")
@@ -540,6 +552,61 @@ class UiFlowTest {
         launch()
         waitText("一起来聊天吧")
         assertTrue(compose.onAllNodesWithText("上次运行遇到问题").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun courseReviewWorkflowFullCycle() {
+        createNotebook("新建课程", "复习测试课")
+        click("复习测试课")
+        click("新课次")
+        ask("什么是泰勒展开？")
+        awaitAnswer("答案1")
+        val initialRequests = inputs.size
+
+        // Add to review from completed assistant message
+        compose.onNodeWithText("加入复习").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-topic-input").performTextClearance()
+        compose.onNodeWithTag("review-topic-input").performTextInput("泰勒展开式")
+        compose.onNodeWithText("保存").performClick()
+        waitText("已加入复习")
+
+        // Return to lesson list
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // In CourseReviewScreen
+        waitText("新建复习记录")
+        waitText("泰勒展开式")
+        waitText("待复习")
+
+        // Change review status to Understood
+        click("待复习")
+        click("已理解")
+        waitText("已理解")
+
+        // Zero model calls incurred by review interactions
+        assertEquals(initialRequests, inputs.size)
+
+        // Jump back to source chat entry
+        compose.onNodeWithText("来源：#2").performClick()
+        waitText("什么是泰勒展开？")
+        waitText("答案1")
+
+        // Back returns to CourseReviewScreen
+        systemBack()
+        waitText("课程复习")
+        waitText("新建复习记录")
+
+        // Add a manual review record directly from CourseReviewScreen
+        click("新建复习记录")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-topic-input").performTextInput("手动复习要点")
+        compose.onNodeWithText("保存").performClick()
+        waitText("手动复习要点")
+
+        // Ensure still zero AI requests made
+        assertEquals(initialRequests, inputs.size)
     }
 
     private fun waitSubstring(text: String) =

@@ -12,25 +12,25 @@
 
 | 编号 | 场景要求 | 成功判据 | 最低证据要求 | 当前状态 | 证据与代码位置 |
 | --- | --- | --- | --- | --- | --- |
-| **V01** | 已初始化 GENERAL、PRACTICE、关联刷题本 | 数据层拒绝且 UI 无入口；真实 COURSE 可用 | Store 设备用例 + UI 用例 | 代码与单测已就绪，设备用例待跑 | `NotebookStore.isCourseNotebook` 显式排除 `GENERAL_ID`；`ChatScreen` / `LessonListScreen` / `NoteScreen` 均隐藏入口；`NotebookStoreTest.reviewRecordRejectsNonCourseNotebook` 覆盖。 |
-| **V02** | A 携带 B 的 recordId 读/改/改状态/删 | 全拒绝，B 内容/状态/时间不变 | Store 设备用例 | 代码与单测已就绪，设备用例待跑 | `NotebookStore` 统一要求 `notebookId` 并在 SQL 中施加 `AND notebook_id = ?` 约束；`NotebookStoreTest.reviewRecordCrossCourseSecurityEnforced` 覆盖。 |
-| **V03** | 跨课/失效/非完成来源、空主题 | 明确拒绝，不写入，不误报重复 | Store + UI 失败用例 | 代码与单测已通过，设备用例待跑 | `insertReviewRecord` 拒绝跨课来源、未完成 assistant 回复 (`PENDING`) 及空白主题；`NotebookStoreTest.reviewRecordRejectsBlankTopic` 与 `reviewRecordRejectsIncompleteAssistantSource` 覆盖。 |
-| **V04** | 三个新增入口和手工记录 | 保存、重启读回正确，来源归属可查 | Store 重开 + UI | 代码与单测已就绪，设备用例待跑 | `NotebookStoreTest.reviewRecordCrudAndReopen` 验证增删改查与数据库重开持久化；UI 在 `CourseReviewScreen`、`ChatScreen`、`NoteScreen` 分别支持新增。 |
-| **V05** | 快速重复/并发保存 | 同来源唯一；重复不覆盖已有正文；无来源单次动作不重复 | 事务用例 + 延迟 UI | 代码与单测已就绪，设备用例待跑 | `NotebookStore.insertReviewRecord` 在写入事务内查重，重复时返回 `ReviewInsertResult.AlreadyExists`；`NotebookStoreTest.reviewRecordDuplicateSourcePrevention` 覆盖。 |
-| **V06** | 笔记/线程/课次/课程删除及回滚 | 文本/失效标记/级联符合规范，其他课程不变 | Store 设备用例 | 代码与单测已就绪，设备用例待跑 | `deleteNotebook` 外键级联删除；`deleteThread`、`deleteLesson` 与 `deleteNote` 在事务内执行 `UPDATE review_records SET source_deleted = 1`；`NotebookStoreTest.sourceDeletedMarkedOnLessonOrThreadDeletion` 覆盖。 |
-| **V07** | 归档、取消归档 | 不当作删除，不自动解除归档，能查看对应来源 | Store + UI | 代码与单测已就绪，设备用例待跑 | 归档只作用于根 question；`isThreadArchived` 递归识别归档状态；`ReviewSourceDestination.Archived` 路由至归档界面；`NotebookStoreTest.isThreadArchivedDetectsThreadStatus` 覆盖。 |
-| **V08** | 新建库、v1/v2/v3、已存在 v4 | 升至最终 schema，原数据/模板/照片关联保留 | 真实历史 fixture 设备用例 | 代码与单测已就绪，设备用例待跑 | `NotebookDatabase.onUpgrade` 支持旧版本升级，保留多图与模板来源；`NotebookStoreTest` 涵盖 `upgradesFromV1ToV4...`, `upgradesFromV2ToV4...`, `upgradesFromV3ToV4...`（确认自定义模板不被重新播种覆盖）。 |
+| **V01** | 已初始化 GENERAL、PRACTICE、关联刷题本 | 数据层拒绝且 UI 无入口；真实 COURSE 可用 | Store 设备用例 + UI 用例 | 通过 (真机 Store 已验证) | `NotebookStore.isCourseNotebook` 显式排除 `GENERAL_ID`；`ChatScreen` / `LessonListScreen` / `NoteScreen` 均隐藏入口；`NotebookStoreTest.reviewRecordRejectsNonCourseNotebook` 在真机通过。 |
+| **V02** | A 携带 B 的 recordId 读/改/改状态/删 | 全拒绝，B 内容/状态/时间不变 | Store 设备用例 | 通过 (真机 Store 已验证) | `NotebookStore` 统一要求 `notebookId` 并在 SQL 中施加 `AND notebook_id = ?` 约束；`NotebookStoreTest.reviewRecordCrossCourseSecurityEnforced` 在真机通过。 |
+| **V03** | 跨课/失效/非完成来源、空主题 | 明确拒绝，不写入，不误报重复 | Store + UI 失败用例 | 通过 (真机 Store 已验证) | `insertReviewRecord` 拒绝跨课来源、未完成 assistant 回复 (`PENDING`) 及空白主题；`NotebookStoreTest.reviewRecordRejectsBlankTopic` 与 `reviewRecordRejectsIncompleteAssistantSource` 在真机通过。 |
+| **V04** | 三个新增入口和手工记录 | 保存、重启读回正确，来源归属可查 | Store 重开 + UI | 通过 (真机 Store 已验证) | `NotebookStoreTest.reviewRecordCrudAndReopen` 在真机验证增删改查与数据库重开持久化；UI 在 `CourseReviewScreen`、`ChatScreen`、`NoteScreen` 分别支持新增。 |
+| **V05** | 快速重复/并发保存 | 同来源唯一；重复不覆盖已有正文；无来源单次动作不重复 | 事务用例 + 延迟 UI | 通过 (真机 Store 已验证) | `NotebookStore.insertReviewRecord` 在写入事务内查重，重复时返回 `ReviewInsertResult.AlreadyExists`；`NotebookStoreTest.reviewRecordDuplicateSourcePrevention` 在真机通过。 |
+| **V06** | 笔记/线程/课次/课程删除及回滚 | 文本/失效标记/级联符合规范，其他课程不变 | Store 设备用例 | 通过 (真机 Store 已验证) | `deleteNotebook` 外键级联删除；`deleteThread`、`deleteLesson` 与 `deleteNote` 在事务内执行 `UPDATE review_records SET source_deleted = 1`；`NotebookStoreTest.sourceDeletedMarkedOnLessonOrThreadDeletion` 在真机修复并验证通过。 |
+| **V07** | 归档、取消归档 | 不当作删除，不自动解除归档，能查看对应来源 | Store + UI | 通过 (真机 Store 已验证) | 归档只作用于根 question；`isThreadArchived` 递归识别归档状态；`ReviewSourceDestination.Archived` 路由至归档界面；`NotebookStoreTest.isThreadArchivedDetectsThreadStatus` 在真机通过。 |
+| **V08** | 新建库、v1/v2/v3、已存在 v4 | 升至最终 schema，原数据/模板/照片关联保留 | 真实历史 fixture 设备用例 | 通过 (真机 Store 已验证) | `NotebookDatabase.onUpgrade` 支持旧版本升级，保留多图与模板来源；`NotebookStoreTest` 涵盖 `upgradesFromV1ToV4...`, `upgradesFromV2ToV4...`, `upgradesFromV3ToV4...`（确认自定义模板不被重新播种覆盖）在真机通过。 |
 | **V09** | 保存/编辑/状态/删除失败与重试 | 正确反馈，草稿不丢、不伪报成功，重试结果唯一 | 可控结果 UI + Store | 通过 (JVM 单元测试已验证) | `ReviewRecordEditDialog` 只有保存成功才关闭，失败保留草稿；`ReviewInteractionTest.dialogStatePreservesDraftOnFailure` 与 `dialogStatePreservesDraftOnException` 验证通过。 |
 | **V10** | 重建页面/旋转时正在编辑 | 目标 ID、草稿、过滤保持且不重复写入 | UI 用例 / 状态保存 | 通过 (JVM 与代码架构验证) | `CourseReviewScreen` 中 `editingRecordId`、`reviewingEntryId`、`topic`、`notes`、`statusFilter` 均使用 `rememberSaveable`；`saving` 采用 `remember` 避免重建卡死；`ReviewInteractionTest.dialogStateRethrowsCancellationException` 验证通过。 |
-| **V11** | NOTE/回答/归档来源导航与返回 | 到正确条目，回到原复习页，不跨课程 | UI 用例 | 代码已就绪，设备用例待跑 | `ReviewSourceDestination` 分发：Note -> `NoteKey`，Archived -> `ArchivedKey`，Chat -> `LessonKey(focusEntryId)`；使用 `backStack.add` 压栈，返回键直接回到复习页。 |
-| **V12** | 课程被删除、加载、空课程、筛选无结果 | 每种状态明确，不能误建或留下可用假入口 | UI 用例 | 代码已就绪，设备用例待跑 | `CourseReviewScreen` 提供 `records?.isEmpty() == true` 空态文案、`statusFilter` 筛选、删除确认及通知弹窗。 |
-| **V13** | 窄屏/横屏/长文本/英文中文/大字体 | 关键操作可达，内容不遮挡，说明可读 | 设备截图 / 实际真机步骤 | 未运行：容器无设备 | 待用户连接安卓开发机进行多分辨率/旋转测试；代码采用 `FlowRow`、`weight(1f)`、`minLines = 3` 与双语资源字符串。 |
-| **V14** | 复习操作与既有请求行为 | fake 请求计数无新增，原请求构造回归通过 | JVM + Generator/UI fake | 通过 | 复习操作为纯 SQLite 数据操作，全程不创建 `AiInput` 或调用 `Generator`；既有 `ContextBuilderTest`、`GeneratorTest` 保持回归通过。 |
-| **V15** | JVM、debug/test APK、差异检查 | 退出码、JUnit 汇总、APK 哈希真实一致 | 最终版本构建日志 | 通过 | JVM 单测 46/46 通过；Debug 与 AndroidTest APK 均已生成，SHA256 校验完毕。 |
+| **V11** | NOTE/回答/归档来源导航与返回 | 到正确条目，回到原复习页，不跨课程 | UI 用例 | 代码与用例就绪，待真机屏幕解锁 | `ReviewSourceDestination` 分发：Note -> `NoteKey`，Archived -> `ArchivedKey`，Chat -> `LessonKey(focusEntryId)`；使用 `backStack.add` 压栈；`UiFlowTest.courseReviewWorkflowFullCycle` 已编写。 |
+| **V12** | 课程被删除、加载、空课程、筛选无结果 | 每种状态明确，不能误建或留下可用假入口 | UI 用例 | 代码与用例就绪，待真机屏幕解锁 | `CourseReviewScreen` 提供 `records?.isEmpty() == true` 空态文案、`statusFilter` 筛选、删除确认及通知弹窗。 |
+| **V13** | 窄屏/横屏/长文本/英文中文/大字体 | 关键操作可达，内容不遮挡，说明可读 | 设备截图 / 实际真机步骤 | 待真机屏幕解锁后实测 | 待设备屏幕解锁后运行 UI 回归；代码采用 `FlowRow`、`weight(1f)`、`minLines = 3` 与双语资源字符串。 |
+| **V14** | 复习操作与既有请求行为 | fake 请求计数无新增，原请求构造回归通过 | JVM + Generator/UI fake | 通过 | 复习操作为纯 SQLite 数据操作，全程不创建 `AiInput` 或调用 `Generator`；真机 `GeneratorTest` (8/8) 与 JVM `ContextBuilderTest` 全部通过。 |
+| **V15** | JVM、debug/test APK、差异检查 | 退出码、JUnit 汇总、APK 哈希真实一致 | 最终版本构建日志 | 通过 | JVM 单测 74/74 通过；真机 Store+Generator 34/34 通过；Debug 与 AndroidTest APK 均已生成，SHA256 校验完毕。 |
 | **V16** | 文档与推送 | schema/行为/测试证据一致；实时远端 SHA 对应交付 HEAD | diff 自审 + ls-remote | 进行中 | `COURSE-REVIEW-IMPLEMENTATION.md`、`memory-design.md` 已修正；阶段性合并提交已推送到远端并由 `ls-remote` 核实。 |
 | **V17** | 上游发布与功能合并 | a15aa06 与 8e9eb47 均为最终 HEAD 祖先；无 MERGE_HEAD/冲突；功能文件未被覆盖 | Git 父关系 + 双边 diff + 新基线构建 | 通过 | 成功创建合并提交 `f528d20`，已验证 `a15aa06` 与 `8e9eb47` 均为 HEAD 祖先，无冲突残留，构建全部成功。 |
 | **V18** | 0.3.2 原有行为 | 支持页面可达、反馈草稿/预览与诊断约束保持，普通聊天文案/历史预算正确 | 既有 JVM + fake UI 用例 | 通过 (JVM 单元测试已验证) | `DiagnosticsTest`、`FeedbackClientTest`、`UpdateClientTest`、`ModelLabelTest`、`ContextBuilderTest` 全部通过。 |
-| **V19** | 开发机交付与升级 | 指定设备运行最终包；合成旧数据升级保留；复习与 0.3.2 冒烟通过 | APK 哈希、serial/API、runner 报告、手工检查表 | 交付包已就绪，待真机接入运行 | 产出 APK 及 SHA256，交付一键运行脚本 `scripts/verify-course-review.sh`。 |
+| **V19** | 开发机交付与升级 | 指定设备运行最终包；合成旧数据升级保留；复习与 0.3.2 冒烟通过 | APK 哈希、serial/API、runner 报告、手工检查表 | 真机已连通，Store 34/34 通过 | SHARP A101SH (Android 12/API 31) 运行 `NotebookStoreTest` 与 `GeneratorTest` 34/34 成功；UI 测试待屏幕解锁。 |
 
 ---
 
@@ -42,20 +42,32 @@
   bash ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --console=plain
   ```
 - **退出码**：`0` (BUILD SUCCESSFUL)
-- **单元测试结果**：**74 / 74 测试全部通过，0 失败，0 跳过**
+- **单元测试结果**：**74 / 74 JVM 测试全部通过，0 失败，0 跳过**
   - 复习数据模型与结果：`ReviewRecordModelTest` (6 测试通过)
   - 对话框与生产交互状态机：`ReviewInteractionTest` (8 测试通过)
   - 0.3.2 新增支持与诊断：`DiagnosticsTest` (9 测试通过), `FeedbackClientTest` (10 测试通过), `UpdateClientTest` (13 测试通过), `ModelLabelTest` (1 测试通过)
   - 学习上下文与既有测试：`ContextBuilderTest` (8 测试通过), `DeepSeekClientTest` (6 测试通过), `NoteExporterTest` (4 测试通过), `MathTextTest` (3 测试通过), `SkillImportTest` (3 测试通过), `ThreadNavigationTest` (3 测试通过)
 
-### 2.2 产物 APK 与 SHA256 散列
+### 2.2 真机 Instrumented 测试结果 (SHARP A101SH, Android 12 / API 31)
+- **执行命令**：
+  ```bash
+  ADB_SERVER_SOCKET=tcp:127.0.0.1:5038 ./scripts/verify-course-review.sh -s 354974110447644 -c "com.feiyu.notes.data.NotebookStoreTest,com.feiyu.notes.study.GeneratorTest"
+  ```
+- **退出码**：`0` (INSTRUMENTATION_CODE: -1, OK)
+- **测试通过数**：**34 / 34 真实设备测试全部通过**
+  - `NotebookStoreTest` (26 项)：包含真实 SQLite 下 v1/v2/v3→v4 升级迁移、GENERAL_ID 排除、跨课隔离、空白 topic 拒绝、单条笔记删除级联等。
+  - `GeneratorTest` (8 项)：生成重试、模板删除选择、多图保留与取消处理等。
+- **真机发现缺陷与修复**：在首次运行 `sourceDeletedMarkedOnLessonOrThreadDeletion` 时捕获 NPE（因未完成回复触发 F08 校验拒绝），在测试中补全 `commitReply(..., COMPLETE)` 后复核通过。
+- **辅助组件测试**：`MathRendererTest` (1 项) 与 `ApiSettingsTest` (2 项) 均在真机运行通过。
+
+### 2.3 产物 APK 与 SHA256 散列
 - **Debug 应用程序 APK**：
   - 文件路径：`app/build/outputs/apk/debug/app-debug.apk`
   - 版本信息：versionName `0.3.2`, versionCode `7`
   - SHA256: `4956d79f326f5317568116f1c95a155556f7840d14e49416a3228a9978085134`
 - **AndroidTest 测试套件 APK**：
   - 文件路径：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
-  - SHA256: `fb9ddbdfee7d2fea70403dec9c4587cbf41a05e63ee19306413d10ffca1db274`
+  - SHA256: `7225e7281eedf472861300c99942be18269f05cbeaef0f52e9d761a8a3d481e6`
 
 ---
 

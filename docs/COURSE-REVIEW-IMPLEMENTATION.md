@@ -148,20 +148,26 @@ bash ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --consol
 - **Debug APK**：`app/build/outputs/apk/debug/app-debug.apk`
   - SHA256: `4956d79f326f5317568116f1c95a155556f7840d14e49416a3228a9978085134`
 - **AndroidTest APK**：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
-  - SHA256: `fb9ddbdfee7d2fea70403dec9c4587cbf41a05e63ee19306413d10ffca1db274`
+  - SHA256: `7225e7281eedf472861300c99942be18269f05cbeaef0f52e9d761a8a3d481e6`
 - **代码规范**：`git diff --check` 0 警告 0 报错。
 
-### 4.3 设备与环境状态核实（明确声明）
-- **工具状态**：`adb` 命令行工具**已安装且存在**（路径 `/home/circleci/android-sdk/platform-tools/adb`，版本 Android Debug Bridge 1.0.41 / 37.0.1）。
-- **设备连接状态**：`adb devices` 显示**当前开发容器内无连接设备**，系统亦未预配置 Android 虚拟设备（AVD）。
-- **未实测项**：
-  - 74 项 JVM 单元测试覆盖了数据模型、状态机与交互提取逻辑，但**不能等同于真机 SQLite 迁移或 UI 交互实测**。
-  - Android 集成测试已完整编译进 `app-debug-androidTest.apk`，但由于当前容器无连接设备，**真机测试需在用户接入安卓开发机后执行**。
+### 4.3 设备与环境状态核实（真机已连通与测试实测）
+- **工具与路由状态**：`adb` 37.0.1，通过 Windows ADB (`127.0.0.1:5037`) 与 SSH 远程转发 (`127.0.0.1:5038`) 成功连接开发机：
+  - 设备型号：SHARP A101SH（Android 12 / API 31，serial `354974110447644`）。
+  - 环境变量配置：`ADB_SERVER_SOCKET=tcp:127.0.0.1:5038`。
+- **真机已实测项**：
+  - **真实 SQLite 与数据层（34/34 全部通过）**：
+    - `com.feiyu.notes.data.NotebookStoreTest` (26 项) + `com.feiyu.notes.study.GeneratorTest` (8 项) 在开发机上执行 `am instrument` 全部通过（验证了真实 SQLite 下 v1/v2/v3→v4 迁移、通用对话拒绝、笔记级联删除更新 `source_deleted=1` 等关键逻辑）。
+    - 发现并修复真实缺陷：`sourceDeletedMarkedOnLessonOrThreadDeletion` 中助手回复未完成触发 F08 校验拒绝，已修正为在 COMPLETE 状态后测试，复核通过。
+  - **原生渲染与加密设置（3/3 全部通过）**：
+    - `MathRendererTest` (1 项) 与 `ApiSettingsTest` (2 项) 在真机上全部通过。
+  - **端到端 UI 测试（`UiFlowTest`，含 14 项）**：
+    - 代码中已添加对 API 31 的兼容处理（`LocaleManager` 仅在 API 33+ 启用，语言设置测试使用 `Assume.assumeTrue` 跳过），并新增课程复习全流程测试 `courseReviewWorkflowFullCycle`。
+    - **待用户解锁屏幕**：设备当前处于密码锁屏状态（`deviceLocked=1`，`KeyguardStateMonitor.mIsShowing=true`），由于系统安全限制前台 Activity 无法在凭据锁屏下获取焦点进行 Compose 渲染；待用户在手机端输入锁屏密码后即可跑通。
 - **开发机验证脚本与一键运行入口**：
-  已提供便捷验收脚本 [`scripts/verify-course-review.sh`](scripts/verify-course-review.sh)：
+  脚本 [`scripts/verify-course-review.sh`](scripts/verify-course-review.sh) 已增加正向退出码校验、非零执行数断言与预期测试类核验：
   ```bash
-  # 指定安卓开发机序列号一键安装并运行全套测试：
-  ./scripts/verify-course-review.sh -s <device_serial>
+  ADB_SERVER_SOCKET=tcp:127.0.0.1:5038 ./scripts/verify-course-review.sh -s 354974110447644
   ```
   该脚本会自动检查设备连接授权状态、检测设备 API 等级（API 33+ 跑含 `UiFlowTest` 全套，API < 33 跑 `NotebookStoreTest` 与 `GeneratorTest`）、安装 APK、执行测试并在失败时返回非零退出码。
 

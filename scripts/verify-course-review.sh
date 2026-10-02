@@ -4,10 +4,11 @@ set -euo pipefail
 # scripts/verify-course-review.sh
 # Verifies Course Review Records implementation on a designated Android test device.
 
-USAGE="Usage: $0 -s <device_serial> [--skip-install]"
+USAGE="Usage: $0 -s <device_serial> [--skip-install] [--classes <class1,class2>]"
 
 SERIAL=""
 SKIP_INSTALL=false
+CUSTOM_CLASSES=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -24,11 +25,21 @@ while [[ $# -gt 0 ]]; do
             SKIP_INSTALL=true
             shift
             ;;
+        -c|--classes)
+            if [[ -z "${2:-}" || "$2" == -* ]]; then
+                echo "Error: --classes requires a comma-separated list of test classes." >&2
+                echo "$USAGE" >&2
+                exit 1
+            fi
+            CUSTOM_CLASSES="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "$USAGE"
             echo "Options:"
-            echo "  -s, --serial <serial>   Specific Android device/emulator serial (required)"
-            echo "  --skip-install          Skip APK installation step"
+            echo "  -s, --serial <serial>       Specific Android device/emulator serial (required)"
+            echo "  --skip-install              Skip APK installation step"
+            echo "  -c, --classes <classes>     Comma-separated list of test classes to run"
             exit 0
             ;;
         *)
@@ -107,24 +118,72 @@ else
 fi
 
 echo "=== 3. Running targeted verification tests ==="
-TEST_CLASSES="com.feiyu.notes.data.NotebookStoreTest,com.feiyu.notes.study.GeneratorTest"
-
-if [[ "$DEVICE_API" =~ ^[0-9]+$ ]] && [[ "$DEVICE_API" -ge 33 ]]; then
-    echo "Device API ($DEVICE_API) >= 33, adding UiFlowTest to test suite."
-    TEST_CLASSES="$TEST_CLASSES,com.feiyu.notes.ui.UiFlowTest"
+if [[ -n "$CUSTOM_CLASSES" ]]; then
+    TEST_CLASSES="$CUSTOM_CLASSES"
 else
-    echo "Note: Device API ($DEVICE_API) < 33. UiFlowTest requires API 33+ (LocaleManager test rule); testing NotebookStoreTest and GeneratorTest."
+    TEST_CLASSES="com.feiyu.notes.data.NotebookStoreTest,com.feiyu.notes.study.GeneratorTest,com.feiyu.notes.ui.UiFlowTest"
 fi
 
 OUTPUT_FILE="$PROJECT_ROOT/build/course-review-validation/device-test-$SERIAL.log"
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 
+verify_runner_output() {
+    local log_file="$1"
+    local expected_classes="$2"
+
+    if [[ ! -s "$log_file" ]]; then
+        echo "Error: Test runner output is empty." >&2
+        return 1
+    fi
+
+    if grep -q "FAILURES!!!" "$log_file" || \
+       grep -q "INSTRUMENTATION_FAILED" "$log_file" || \
+       grep -q "shortMsg=Process crashed" "$log_file" || \
+       grep -q "Process crashed" "$log_file" || \
+       grep -q "INSTRUMENTATION_ABORTED" "$log_file" || \
+       grep -E -q "Failures: [1-9][0-9]*" "$log_file" || \
+       grep -E -q "Errors: [1-9][0-9]*" "$log_file"; then
+        echo "Error: Test runner reported failures or crashed." >&2
+        return 1
+    fi
+
+    if ! grep -q "INSTRUMENTATION_CODE: -1" "$log_file"; then
+        echo "Error: Test runner did not complete successfully (missing INSTRUMENTATION_CODE: -1)." >&2
+        return 1
+    fi
+
+    local count
+    count=$(grep -o -E 'OK \([0-9]+ tests?\)' "$log_file" | grep -o -E '[0-9]+' || true)
+    if [[ -z "$count" ]]; then
+        count=$(grep -o -E 'Tests run: [0-9]+' "$log_file" | head -1 | grep -o -E '[0-9]+' || true)
+    fi
+
+    if [[ -z "$count" || "$count" -le 0 ]]; then
+        echo "Error: Zero tests were executed (count='$count')." >&2
+        return 1
+    fi
+
+    IFS=',' read -ra ADDR <<< "$expected_classes"
+    for cls in "${ADDR[@]}"; do
+        cls=$(echo "$cls" | tr -d ' ')
+        if ! grep -q "class=$cls" "$log_file"; then
+            echo "Error: Expected test class '$cls' was not executed by runner." >&2
+            return 1
+        fi
+    done
+
+    echo "Validation passed: $count tests ran and passed across all expected classes ($expected_classes)."
+    return 0
+}
+
 echo "Executing instrumentation tests: $TEST_CLASSES"
+set +e
 "$ADB_BIN" -s "$SERIAL" shell am instrument -w -r \
     -e class "$TEST_CLASSES" \
-    com.feiyu.notes.test/androidx.test.runner.AndroidJUnitRunner | tee "$OUTPUT_FILE"
+    com.feiyu.notes.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$OUTPUT_FILE"
+set -e
 
-if grep -q "FAILURES!!!" "$OUTPUT_FILE" || grep -q "INSTRUMENTATION_FAILED" "$OUTPUT_FILE" || grep -q "INSTRUMENTATION_RESULT: stream=.*Error" "$OUTPUT_FILE"; then
+if ! verify_runner_output "$OUTPUT_FILE" "$TEST_CLASSES"; then
     echo "=== Verification Result: FAILED ===" >&2
     echo "See log for details: $OUTPUT_FILE" >&2
     exit 1
