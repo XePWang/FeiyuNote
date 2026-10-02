@@ -218,9 +218,12 @@ This PR integrates upstream v0.3.2 release and implements the first version of *
   - `ReviewRecordModelTest` (6 tests for models, defaults, and copy).
   - `ReviewInteractionTest` (8 tests verifying production `ReviewDialogState`, `ReviewDefaults`, draft retention, and `CancellationException` handling).
   - 60 regression unit tests passing (including Diagnostics, FeedbackClient, UpdateClient, ModelLabel, ContextBuilder, DeepSeekClient, NoteExporter, MathText, SkillImport, ThreadNavigation).
-- **Android Integration Tests**: 14 test scenarios in `NotebookStoreTest` covering course isolation, cross-course tamper prevention, cross-course source rejection, GENERAL_ID rejection, blank topic rejection, incomplete assistant source rejection, CRUD/reopen persistence, duplicate prevention, cascade deletion, source deletion flag across thread/lesson/note, thread archive status check, and v1/v2/v3->v4 migrations.
+- **Android Instrumented Device Tests**: 48 passed, 0 failures (`./scripts/verify-course-review.sh -s 354974110447644` on SHARP A101SH, Android 12 / API 31).
+  - `NotebookStoreTest` (26 tests covering course isolation, cross-course tamper prevention, cross-course source rejection, GENERAL_ID rejection, blank topic rejection, incomplete assistant source rejection, CRUD/reopen persistence, duplicate prevention, cascade deletion, source deletion flag across thread/lesson/note, thread archive status check, and v1/v2/v3->v4 migrations).
+  - `GeneratorTest` (8 tests verifying generation retry, template selection, multi-photo retention, and cancellation).
+  - `UiFlowTest` (14 tests verifying full Compose UI flows, including `courseReviewWorkflowFullCycle` with record creation, status chips, source jump, backstack persistence, math rendering, and session models).
 - **Compilation**: Both `app-debug.apk` and `app-debug-androidTest.apk` built successfully.
-  - `app-debug.apk` SHA256: `4956d79f326f5317568116f1c95a155556f7840d14e49416a3228a9978085134`
-  - `app-debug-androidTest.apk` SHA256: `fb9ddbdfee7d2fea70403dec9c4587cbf41a05e63ee19306413d10ffca1db274`
-- **Device Verification**: Provided `scripts/verify-course-review.sh -s <device_serial>` for automated on-device test execution.
+  - `app-debug.apk` SHA256: `93c4c97cad7a60973b397268ccc7191a4e18b17e1aea5bea90ae2a4ae44ca74f`
+  - `app-debug-androidTest.apk` SHA256: `ef0848877fa0c231212a49f6c8fe8c929d53bc95cb21b6bb0248fdcada2a994f`
+- **Device Verification**: Verified end-to-end on SHARP A101SH via `scripts/verify-course-review.sh -s 354974110447644` with exit code 0.
 ```

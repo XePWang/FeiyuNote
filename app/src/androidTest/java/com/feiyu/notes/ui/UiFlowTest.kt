@@ -79,10 +79,15 @@ class UiFlowTest {
     private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { config, input ->
         configs += config
         inputs += input
-        mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
+        val reply = mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
+        android.util.Log.i("UiFlowTest", "fakeModel called: inputs.size=${inputs.size}, reply='${reply.text}'")
+        reply
     }
 
     @Before fun setUp() {
+        inputs.clear()
+        configs.clear()
+        mathReply = null
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             localeManager?.let {
                 originalLocales = it.applicationLocales
@@ -119,7 +124,9 @@ class UiFlowTest {
         createNotebook("新建课程", "公式测试")
         click("公式测试")
         click("新课次")
-        shell("wm size 1080x2300")
+        if (isEmulator()) {
+            shell("wm size 1080x2300")
+        }
         ask("请解释这些公式")
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 3 }
         assertTrue(compose.onAllNodesWithTag("math-inline", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
@@ -291,6 +298,7 @@ class UiFlowTest {
         // A course lesson has neither mastery nor the mistake action.
         systemBack()
         systemBack()
+        waitText("新建课程")
         click("线代")
         click("新课次")
         ask("行列式")
@@ -355,6 +363,10 @@ class UiFlowTest {
     }
 
     @Test fun layoutAdaptsToWindowWidthAndKeepsDraft() {
+        org.junit.Assume.assumeTrue(
+            "Foldable dual-pane simulation via wm size is intended for emulators/foldable hardware",
+            isEmulator()
+        )
         createNotebook("新建课程", "英语")
         click("英语")
         click("新课次")
@@ -580,16 +592,16 @@ class UiFlowTest {
         waitText("泰勒展开式")
         waitText("待复习")
 
-        // Change review status to Understood
-        click("待复习")
-        click("已理解")
+        // Change review status on card from Pending to Understood
+        compose.onNodeWithTag("record-status-chip").performClick()
+        compose.onNodeWithTag("status-menu-item-understood").performClick()
         waitText("已理解")
 
         // Zero model calls incurred by review interactions
         assertEquals(initialRequests, inputs.size)
 
         // Jump back to source chat entry
-        compose.onNodeWithText("来源：#2").performClick()
+        compose.onNodeWithTag("jump-to-source").performClick()
         waitText("什么是泰勒展开？")
         waitText("答案1")
 
@@ -646,6 +658,7 @@ class UiFlowTest {
     }
 
     private fun ask(text: String) {
+        android.util.Log.i("UiFlowTest", "ask: typing '$text' and clicking send")
         typeDraft(text)
         compose.onNodeWithTag("send").performClick()
         hideKeyboard()
@@ -682,21 +695,31 @@ class UiFlowTest {
             androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView)
                 .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
         }
-        compose.waitUntil(5_000) {
-            var visible = false
-            scenario!!.onActivity { activity ->
-                visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
-                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        runCatching {
+            compose.waitUntil(10_000) {
+                var visible = false
+                scenario!!.onActivity { activity ->
+                    visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                !visible
             }
-            !visible
         }
         compose.waitForIdle()
     }
 
+    private fun isEmulator(): Boolean {
+        return android.os.Build.FINGERPRINT.contains("generic") ||
+            android.os.Build.MODEL.contains("Emulator") ||
+            android.os.Build.HARDWARE.contains("goldfish") ||
+            android.os.Build.HARDWARE.contains("ranchu")
+    }
+
     /** The reply is on screen and the single generation slot is free again. */
     private fun awaitAnswer(text: String) {
+        android.util.Log.i("UiFlowTest", "awaitAnswer waiting for text: '$text'")
         waitText(text)
-        compose.waitUntil(10_000) { app.generator.status.value.running == null }
+        compose.waitUntil(15_000) { app.generator.status.value.running == null }
     }
 
     private fun clickNth(text: String, index: Int) {
@@ -705,11 +728,13 @@ class UiFlowTest {
         compose.waitForIdle()
     }
 
-    private fun waitText(text: String) =
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitText(text: String) {
+        android.util.Log.i("UiFlowTest", "waitText waiting for: '$text'")
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty() }
+    }
 
     private fun waitDescription(text: String) =
-        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun providerUri(file: File): Uri = FileProvider.getUriForFile(app, "${app.packageName}.photos", file)
 

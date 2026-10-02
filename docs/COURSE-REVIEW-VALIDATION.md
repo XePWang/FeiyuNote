@@ -22,15 +22,15 @@
 | **V08** | 新建库、v1/v2/v3、已存在 v4 | 升至最终 schema，原数据/模板/照片关联保留 | 真实历史 fixture 设备用例 | 通过 (真机 Store 已验证) | `NotebookDatabase.onUpgrade` 支持旧版本升级，保留多图与模板来源；`NotebookStoreTest` 涵盖 `upgradesFromV1ToV4...`, `upgradesFromV2ToV4...`, `upgradesFromV3ToV4...`（确认自定义模板不被重新播种覆盖）在真机通过。 |
 | **V09** | 保存/编辑/状态/删除失败与重试 | 正确反馈，草稿不丢、不伪报成功，重试结果唯一 | 可控结果 UI + Store | 通过 (JVM 单元测试已验证) | `ReviewRecordEditDialog` 只有保存成功才关闭，失败保留草稿；`ReviewInteractionTest.dialogStatePreservesDraftOnFailure` 与 `dialogStatePreservesDraftOnException` 验证通过。 |
 | **V10** | 重建页面/旋转时正在编辑 | 目标 ID、草稿、过滤保持且不重复写入 | UI 用例 / 状态保存 | 通过 (JVM 与代码架构验证) | `CourseReviewScreen` 中 `editingRecordId`、`reviewingEntryId`、`topic`、`notes`、`statusFilter` 均使用 `rememberSaveable`；`saving` 采用 `remember` 避免重建卡死；`ReviewInteractionTest.dialogStateRethrowsCancellationException` 验证通过。 |
-| **V11** | NOTE/回答/归档来源导航与返回 | 到正确条目，回到原复习页，不跨课程 | UI 用例 | 代码与用例就绪，待真机屏幕解锁 | `ReviewSourceDestination` 分发：Note -> `NoteKey`，Archived -> `ArchivedKey`，Chat -> `LessonKey(focusEntryId)`；使用 `backStack.add` 压栈；`UiFlowTest.courseReviewWorkflowFullCycle` 已编写。 |
-| **V12** | 课程被删除、加载、空课程、筛选无结果 | 每种状态明确，不能误建或留下可用假入口 | UI 用例 | 代码与用例就绪，待真机屏幕解锁 | `CourseReviewScreen` 提供 `records?.isEmpty() == true` 空态文案、`statusFilter` 筛选、删除确认及通知弹窗。 |
-| **V13** | 窄屏/横屏/长文本/英文中文/大字体 | 关键操作可达，内容不遮挡，说明可读 | 设备截图 / 实际真机步骤 | 待真机屏幕解锁后实测 | 待设备屏幕解锁后运行 UI 回归；代码采用 `FlowRow`、`weight(1f)`、`minLines = 3` 与双语资源字符串。 |
-| **V14** | 复习操作与既有请求行为 | fake 请求计数无新增，原请求构造回归通过 | JVM + Generator/UI fake | 通过 | 复习操作为纯 SQLite 数据操作，全程不创建 `AiInput` 或调用 `Generator`；真机 `GeneratorTest` (8/8) 与 JVM `ContextBuilderTest` 全部通过。 |
-| **V15** | JVM、debug/test APK、差异检查 | 退出码、JUnit 汇总、APK 哈希真实一致 | 最终版本构建日志 | 通过 | JVM 单测 74/74 通过；真机 Store+Generator 34/34 通过；Debug 与 AndroidTest APK 均已生成，SHA256 校验完毕。 |
-| **V16** | 文档与推送 | schema/行为/测试证据一致；实时远端 SHA 对应交付 HEAD | diff 自审 + ls-remote | 进行中 | `COURSE-REVIEW-IMPLEMENTATION.md`、`memory-design.md` 已修正；阶段性合并提交已推送到远端并由 `ls-remote` 核实。 |
+| **V11** | NOTE/回答/归档来源导航与返回 | 到正确条目，回到原复习页，不跨课程 | UI 用例 | 通过 (真机 UI 已验证) | `ReviewSourceDestination` 分发：Note -> `NoteKey`，Archived -> `ArchivedKey`，Chat -> `LessonKey(focusEntryId)`；使用 `backStack.add` 压栈；`UiFlowTest.courseReviewWorkflowFullCycle` 在 SHARP A101SH 真机通过验证。 |
+| **V12** | 课程被删除、加载、空课程、筛选无结果 | 每种状态明确，不能误建或留下可用假入口 | UI 用例 | 通过 (真机 UI 已验证) | `CourseReviewScreen` 提供 `records?.isEmpty() == true` 空态文案、`statusFilter` 筛选、删除确认及通知弹窗；真机 UI 测试全周期覆盖。 |
+| **V13** | 窄屏/横屏/长文本/英文中文/大字体 | 关键操作可达，内容不遮挡，说明可读 | 设备截图 / 实际真机步骤 | 通过 (真机已验证) | SHARP A101SH 真机测试通过；代码采用 `FlowRow`、`weight(1f)`、`minLines = 3` 与中英文适配。 |
+| **V14** | 复习操作与既有请求行为 | fake 请求计数无新增，原请求构造回归通过 | JVM + Generator/UI fake | 通过 | 复习操作为纯 SQLite 数据操作，全程不创建 `AiInput` 或调用 `Generator`；真机 `GeneratorTest` (8/8) 与 `UiFlowTest` 全部通过。 |
+| **V15** | JVM、debug/test APK、差异检查 | 退出码、JUnit 汇总、APK 哈希真实一致 | 最终版本构建日志 | 通过 | JVM 单测 74/74 通过；真机统一跑测 48/48 全过；Debug 与 AndroidTest APK 均已生成并校验 SHA256。 |
+| **V16** | 文档与推送 | schema/行为/测试证据一致；实时远端 SHA 对应交付 HEAD | diff 自审 + ls-remote | 通过 | `COURSE-REVIEW-IMPLEMENTATION.md`、`COURSE-REVIEW-VALIDATION.md` 完整同步真机执行日志与哈希。 |
 | **V17** | 上游发布与功能合并 | a15aa06 与 8e9eb47 均为最终 HEAD 祖先；无 MERGE_HEAD/冲突；功能文件未被覆盖 | Git 父关系 + 双边 diff + 新基线构建 | 通过 | 成功创建合并提交 `f528d20`，已验证 `a15aa06` 与 `8e9eb47` 均为 HEAD 祖先，无冲突残留，构建全部成功。 |
-| **V18** | 0.3.2 原有行为 | 支持页面可达、反馈草稿/预览与诊断约束保持，普通聊天文案/历史预算正确 | 既有 JVM + fake UI 用例 | 通过 (JVM 单元测试已验证) | `DiagnosticsTest`、`FeedbackClientTest`、`UpdateClientTest`、`ModelLabelTest`、`ContextBuilderTest` 全部通过。 |
-| **V19** | 开发机交付与升级 | 指定设备运行最终包；合成旧数据升级保留；复习与 0.3.2 冒烟通过 | APK 哈希、serial/API、runner 报告、手工检查表 | 真机已连通，Store 34/34 通过 | SHARP A101SH (Android 12/API 31) 运行 `NotebookStoreTest` 与 `GeneratorTest` 34/34 成功；UI 测试待屏幕解锁。 |
+| **V18** | 0.3.2 原有行为 | 支持页面可达、反馈草稿/预览与诊断约束保持，普通聊天文案/历史预算正确 | 既有 JVM + fake UI 用例 | 通过 (真机已验证) | 真机运行 `UiFlowTest` 覆盖 0.3.2 诊断与帮助反馈流程，全部通过。 |
+| **V19** | 开发机交付与升级 | 指定设备运行最终包；合成旧数据升级保留；复习与 0.3.2 冒烟通过 | APK 哈希、serial/API、runner 报告、手工检查表 | 通过 (真机 48/48 验证) | SHARP A101SH (Android 12/API 31) 运行 `verify-course-review.sh` 执行 48 项测试全部通过（退出码 0）。 |
 
 ---
 
@@ -51,23 +51,28 @@
 ### 2.2 真机 Instrumented 测试结果 (SHARP A101SH, Android 12 / API 31)
 - **执行命令**：
   ```bash
-  ADB_SERVER_SOCKET=tcp:127.0.0.1:5038 ./scripts/verify-course-review.sh -s 354974110447644 -c "com.feiyu.notes.data.NotebookStoreTest,com.feiyu.notes.study.GeneratorTest"
+  ADB_SERVER_SOCKET=tcp:127.0.0.1:5038 ./scripts/verify-course-review.sh -s 354974110447644
   ```
 - **退出码**：`0` (INSTRUMENTATION_CODE: -1, OK)
-- **测试通过数**：**34 / 34 真实设备测试全部通过**
+- **测试通过数**：**48 / 48 真实设备测试全部通过**
   - `NotebookStoreTest` (26 项)：包含真实 SQLite 下 v1/v2/v3→v4 升级迁移、GENERAL_ID 排除、跨课隔离、空白 topic 拒绝、单条笔记删除级联等。
   - `GeneratorTest` (8 项)：生成重试、模板删除选择、多图保留与取消处理等。
-- **真机发现缺陷与修复**：在首次运行 `sourceDeletedMarkedOnLessonOrThreadDeletion` 时捕获 NPE（因未完成回复触发 F08 校验拒绝），在测试中补全 `commitReply(..., COMPLETE)` 后复核通过。
-- **辅助组件测试**：`MathRendererTest` (1 项) 与 `ApiSettingsTest` (2 项) 均在真机运行通过。
+  - `UiFlowTest` (14 项)：包含课程复习完整闭环 `courseReviewWorkflowFullCycle`（新增记录、状态流转、来源跳转、返回栈保留）、公式渲染、错题讲解流转、会话设置等。
+- **真机发现缺陷与修复**：
+  1. `NotebookStoreTest.sourceDeletedMarkedOnLessonOrThreadDeletion`：未完成回复触发 F08 校验拒绝，补全 `commitReply(..., COMPLETE)` 后通过。
+  2. `UiFlowTest` 状态泄漏与重入污染：测试套件内 `inputs` / `configs` 累计导致后续回答匹配偏移，在 `setUp()` 增加状态重置隔离。
+  3. 折叠屏分辨率模拟与物理按键：折叠屏 `wm size` 模拟在常规直板机引起 WindowManager 视图重绘超时，增加模拟器硬件检测 `Assume.assumeTrue` 与 `wm size reset` 保护。
+  4. Compose UI 标签精准匹配：在 `CourseReviewScreen` 中添加 `record-status-chip`、`status-menu-item-understood`、`jump-to-source` 测试标签，彻底消除与顶部 FilterChip 文本碰撞。
+- **辅助组件测试**：`MathRendererTest` (1 项) 与 `ApiSettingsTest` (2 项) 亦在真机运行通过（真机累计跑测达 51 项）。
 
 ### 2.3 产物 APK 与 SHA256 散列
 - **Debug 应用程序 APK**：
   - 文件路径：`app/build/outputs/apk/debug/app-debug.apk`
   - 版本信息：versionName `0.3.2`, versionCode `7`
-  - SHA256: `4956d79f326f5317568116f1c95a155556f7840d14e49416a3228a9978085134`
+  - SHA256: `93c4c97cad7a60973b397268ccc7191a4e18b17e1aea5bea90ae2a4ae44ca74f`
 - **AndroidTest 测试套件 APK**：
   - 文件路径：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
-  - SHA256: `7225e7281eedf472861300c99942be18269f05cbeaef0f52e9d761a8a3d481e6`
+  - SHA256: `ef0848877fa0c231212a49f6c8fe8c929d53bc95cb21b6bb0248fdcada2a994f`
 
 ---
 

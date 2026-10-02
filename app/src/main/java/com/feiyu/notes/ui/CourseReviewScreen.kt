@@ -309,6 +309,7 @@ private fun ReviewRecordCard(
 
                     SuggestionChip(
                         onClick = { statusMenu = true },
+                        modifier = Modifier.testTag("record-status-chip"),
                         label = { Text(statusText) },
                         colors = SuggestionChipDefaults.suggestionChipColors(labelColor = statusColor),
                     )
@@ -324,6 +325,7 @@ private fun ReviewRecordCard(
                         )
                         DropdownMenuItem(
                             text = { Text(context.getString(R.string.status_understood)) },
+                            modifier = Modifier.testTag("status-menu-item-understood"),
                             onClick = { statusMenu = false; onStatusChange(ReviewStatus.UNDERSTOOD) },
                         )
                     }
@@ -359,7 +361,10 @@ private fun ReviewRecordCard(
                         )
                     }
                     record.sourceEntryId != null -> {
-                        TextButton(onClick = onJumpToSource) {
+                        TextButton(
+                            onClick = onJumpToSource,
+                            modifier = Modifier.testTag("jump-to-source"),
+                        ) {
                             Text(context.getString(R.string.review_source, record.sourceEntryId) + " · " + context.getString(R.string.back_to_source))
                         }
                     }
