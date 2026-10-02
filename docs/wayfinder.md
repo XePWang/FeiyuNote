@@ -1,6 +1,6 @@
 # 肥鱼笔记 Wayfinder
 
-**Project outcome:** 在安卓手机、平板或折叠屏上按课程、课次拍照或选图提问，获得 DeepSeek 讲解并整理成本地笔记；刷题本记录错题与掌握状态。[spec](spec.md) 定义产品规则，[plan](plan.md) 保存实现边界与验证证据。
+**Project outcome:** 面向可拍照的移动设备提供随手记录方案；在安卓手机、平板或折叠屏上按课程、课次拍照或选图提问，获得 DeepSeek 讲解并整理成本地笔记，刷题本记录错题与掌握状态。[1.0 目标](plan.md#10-稳定开发目标)是现有 Android 应用的稳定开发；[2.0 长期目标](plan.md#20-ios-长期目标)为 iOS 支持，尚未启动。[spec](spec.md) 定义产品规则，[plan](plan.md) 保存实现边界与验证证据。
 
 ## Next actions
 
