@@ -144,7 +144,10 @@ fun NoteScreen(
                     }
                 }) { Text(context.getString(R.string.share)) }
                 if (notebook?.kind == com.feiyu.notes.data.NotebookKind.COURSE && notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
-                    OutlinedButton(onClick = { addingToReview = true }) {
+                    OutlinedButton(
+                        onClick = { addingToReview = true },
+                        modifier = Modifier.testTag("note-add-to-review"),
+                    ) {
                         Text(context.getString(R.string.add_to_review))
                     }
                 }

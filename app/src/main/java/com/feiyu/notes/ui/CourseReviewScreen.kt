@@ -398,54 +398,49 @@ fun ReviewRecordEditDialog(
     sourceEntryId: Long?,
     onSave: suspend (topic: String, notes: String) -> String?,
     onDismiss: () -> Unit,
+    state: ReviewDialogState = rememberReviewDialogState(initialTopic, initialNotes, sourceEntryId),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var topic by rememberSaveable { mutableStateOf(initialTopic) }
-    var notes by rememberSaveable { mutableStateOf(initialNotes) }
-    var saving by remember { mutableStateOf(false) }
-    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
-
-    val canSave = !saving && topic.isNotBlank()
 
     AlertDialog(
-        onDismissRequest = { if (!saving) onDismiss() },
+        onDismissRequest = { if (!state.saving) onDismiss() },
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (sourceEntryId != null) {
+                if (state.sourceEntryId != null) {
                     Text(
-                        context.getString(R.string.review_source, sourceEntryId),
+                        context.getString(R.string.review_source, state.sourceEntryId),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 OutlinedTextField(
-                    value = topic,
+                    value = state.topic,
                     onValueChange = {
-                        topic = it
-                        errorMessage = null
+                        state.topic = it
+                        state.errorMessage = null
                     },
                     label = { Text(context.getString(R.string.review_topic)) },
                     singleLine = true,
-                    enabled = !saving,
-                    isError = errorMessage != null,
+                    enabled = !state.saving,
+                    isError = state.errorMessage != null,
                     modifier = Modifier.fillMaxWidth().testTag("review-topic-input"),
                 )
                 OutlinedTextField(
-                    value = notes,
+                    value = state.notes,
                     onValueChange = {
-                        notes = it
-                        errorMessage = null
+                        state.notes = it
+                        state.errorMessage = null
                     },
                     label = { Text(context.getString(R.string.review_notes)) },
                     minLines = 3,
-                    enabled = !saving,
+                    enabled = !state.saving,
                     modifier = Modifier.fillMaxWidth().testTag("review-notes-input"),
                 )
-                if (errorMessage != null) {
+                if (state.errorMessage != null) {
                     Text(
-                        text = errorMessage!!,
+                        text = state.errorMessage!!,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.testTag("review-error-message"),
@@ -455,35 +450,25 @@ fun ReviewRecordEditDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = canSave,
+                enabled = state.canSave,
                 onClick = {
                     scope.launch {
-                        saving = true
-                        errorMessage = null
-                        try {
-                            val err = onSave(topic.trim(), notes.trim())
-                            if (err != null) {
-                                errorMessage = err
-                            } else {
-                                onDismiss()
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            errorMessage = context.getString(R.string.save_failed)
-                        } finally {
-                            saving = false
+                        val ok = state.submit(context.getString(R.string.save_failed), onSave)
+                        if (ok) {
+                            onDismiss()
                         }
                     }
                 },
+                modifier = Modifier.testTag("review-dialog-save"),
             ) {
-                Text(context.getString(if (saving) R.string.saving else R.string.save))
+                Text(context.getString(if (state.saving) R.string.saving else R.string.save))
             }
         },
         dismissButton = {
             TextButton(
-                enabled = !saving,
+                enabled = !state.saving,
                 onClick = onDismiss,
+                modifier = Modifier.testTag("review-dialog-cancel"),
             ) {
                 Text(context.getString(R.string.cancel))
             }

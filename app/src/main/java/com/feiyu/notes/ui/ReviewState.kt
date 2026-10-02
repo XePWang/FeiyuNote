@@ -1,7 +1,11 @@
 package com.feiyu.notes.ui
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -49,7 +53,10 @@ class ReviewDialogState(
 
     val canSave: Boolean get() = !saving && topic.isNotBlank()
 
-    suspend fun submit(onSave: suspend (topic: String, notes: String) -> String?): Boolean {
+    suspend fun submit(
+        fallbackErrorMessage: String? = null,
+        onSave: suspend (topic: String, notes: String) -> String?,
+    ): Boolean {
         if (!canSave) return false
         saving = true
         errorMessage = null
@@ -64,10 +71,37 @@ class ReviewDialogState(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            errorMessage = e.message ?: "Save failed"
+            errorMessage = fallbackErrorMessage ?: e.message ?: "Save failed"
             false
         } finally {
             saving = false
         }
     }
+
+    companion object {
+        val Saver: Saver<ReviewDialogState, Any> = listSaver(
+            save = { listOf(it.topic, it.notes, it.sourceEntryId, it.errorMessage) },
+            restore = { list ->
+                ReviewDialogState(
+                    initialTopic = list[0] as String,
+                    initialNotes = list[1] as String,
+                    sourceEntryId = list[2] as? Long,
+                ).apply {
+                    errorMessage = list[3] as? String
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun rememberReviewDialogState(
+    initialTopic: String,
+    initialNotes: String,
+    sourceEntryId: Long?,
+): ReviewDialogState = rememberSaveable(
+    initialTopic, initialNotes, sourceEntryId,
+    saver = ReviewDialogState.Saver
+) {
+    ReviewDialogState(initialTopic, initialNotes, sourceEntryId)
 }

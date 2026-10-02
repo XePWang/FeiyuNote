@@ -3,6 +3,9 @@ package com.feiyu.notes.ui
 import com.feiyu.notes.data.ReviewInsertResult
 import com.feiyu.notes.data.ReviewRecord
 import com.feiyu.notes.data.ReviewStatus
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,6 +15,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 import kotlin.coroutines.cancellation.CancellationException
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ReviewInteractionTest {
 
     @Test
@@ -146,5 +150,48 @@ class ReviewInteractionTest {
         assertEquals("source_not_found", resolveFeedback(sourceNotFound))
         assertEquals("save_failed", resolveFeedback(invalidCourse))
         assertEquals("save_failed", resolveFeedback(failed))
+    }
+
+    @Test
+    fun saverPreservesDraftAndClearsSavingAcrossRestoration() {
+        val original = ReviewDialogState("初始主题", "初始重点笔记", sourceEntryId = 42L).apply {
+            errorMessage = "临时错误"
+            saving = true
+        }
+        val saver = ReviewDialogState.Saver
+        val scope = androidx.compose.runtime.saveable.SaverScope { true }
+        val saved = with(saver) { scope.save(original) }
+        val restored = saver.restore(saved!!)!!
+        assertEquals("初始主题", restored.topic)
+        assertEquals("初始重点笔记", restored.notes)
+        assertEquals(42L, restored.sourceEntryId)
+        assertEquals("临时错误", restored.errorMessage)
+        assertFalse("saving must be reset to false upon restoration", restored.saving)
+        assertTrue(restored.canSave)
+    }
+
+    @Test
+    fun concurrentSubmitIsBlockedWhileSaving() = runTest {
+        val state = ReviewDialogState("主题", "备注", null)
+        var callCount = 0
+        val completer = CompletableDeferred<String?>()
+        val job = launch {
+            state.submit { _, _ ->
+                callCount++
+                completer.await()
+            }
+        }
+        runCurrent()
+        assertTrue(state.saving)
+        // Second concurrent submit while saving must be blocked immediately
+        val secondResult = state.submit { _, _ ->
+            callCount++
+            null
+        }
+        assertFalse(secondResult)
+        assertEquals(1, callCount)
+        completer.complete(null)
+        job.join()
+        assertFalse(state.saving)
     }
 }

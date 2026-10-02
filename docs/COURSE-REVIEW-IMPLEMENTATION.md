@@ -22,13 +22,13 @@
 ## 2. 数据层与 SQLite v4 架构
 
 ### 2.1 数据模型与操作结果
-- [`ReviewStatus`](app/src/main/java/com/feiyu/notes/data/Models.kt): 枚举类型，对应数据库字符串字段：
+- [`ReviewStatus`](../app/src/main/java/com/feiyu/notes/data/Models.kt): 枚举类型，对应数据库字符串字段：
   - `PENDING` ("pending"): 待复习
   - `UNDERSTOOD` ("understood"): 已理解
   - `CONFUSED` ("confused"): 仍有疑问
-- [`ReviewRecord`](app/src/main/java/com/feiyu/notes/data/Models.kt): 数据类，包含字段：
+- [`ReviewRecord`](../app/src/main/java/com/feiyu/notes/data/Models.kt): 数据类，包含字段：
   - `id: Long`, `notebookId: Long`, `topic: String`, `notes: String`, `sourceEntryId: Long? = null`, `sourceDeleted: Boolean = false`, `status: ReviewStatus = ReviewStatus.PENDING`, `createdAt: Long`, `updatedAt: Long`
-- [`ReviewInsertResult`](app/src/main/java/com/feiyu/notes/data/Models.kt): 明确区分 5 种写入结果：
+- [`ReviewInsertResult`](../app/src/main/java/com/feiyu/notes/data/Models.kt): 明确区分 5 种写入结果：
   - `Success(val record: ReviewRecord)`: 写入成功
   - `AlreadyExists(val existingRecord: ReviewRecord)`: 该来源条目已存在有效复习记录
   - `SourceNotFound`: 来源条目不存在、已被删除、非已完成内容或不属于本课程
@@ -36,7 +36,7 @@
   - `Failed`: 数据库写入失败或输入为空
 
 ### 2.2 SQLite Schema (v4)
-在 [`NotebookDatabase.kt`](app/src/main/java/com/feiyu/notes/data/NotebookDatabase.kt) 中将数据库版本升级至 `VERSION = 4`：
+在 [`NotebookDatabase.kt`](../app/src/main/java/com/feiyu/notes/data/NotebookDatabase.kt) 中将数据库版本升级至 `VERSION = 4`：
 
 ```sql
 CREATE TABLE IF NOT EXISTS review_records (
@@ -59,7 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_review_records_notebook ON review_records(noteboo
   - `status` 带有 SQLite `CHECK (status IN ('pending', 'understood', 'confused'))` 约束。
 - **非破坏性迁移**：在 `onUpgrade (oldVersion < 4)` 中执行上述建表与建索引操作。保留原有 `oldVersion < 2`（多图字段）与 `oldVersion < 3`（模板来源）升级逻辑。v3→v4 升级中不执行 `seedGuidedTemplate`，完整保留用户已修改、删除或导入的模板，不发生模板重复播种。
 
-### 2.3 存储与数据访问安全约束 ([`NotebookStore.kt`](app/src/main/java/com/feiyu/notes/data/NotebookStore.kt))
+### 2.3 存储与数据访问安全约束 ([`NotebookStore.kt`](../app/src/main/java/com/feiyu/notes/data/NotebookStore.kt))
 - 移除所有无 `notebookId` 的非限定公开接口。所有复习记录操作强制传入 `notebookId`：
   - `listReviewRecords(notebookId: Long): List<ReviewRecord>`
   - `getReviewRecord(notebookId: Long, recordId: Long): ReviewRecord?`
@@ -79,25 +79,26 @@ CREATE INDEX IF NOT EXISTS idx_review_records_notebook ON review_records(noteboo
 
 ## 3. UI 交互、路由与草稿保护
 
-- **编辑与添加对话框** ([`ReviewRecordEditDialog`](app/src/main/java/com/feiyu/notes/ui/CourseReviewScreen.kt)):
+- **编辑与添加对话框** ([`ReviewRecordEditDialog`](../app/src/main/java/com/feiyu/notes/ui/CourseReviewScreen.kt)):
+  - 生产代码直接绑定 [`ReviewDialogState`](../app/src/main/java/com/feiyu/notes/ui/ReviewState.kt)，统一管理表单状态与提交状态机。
   - 采用异步签名：`onSave: suspend (topic: String, notes: String) -> String?`（成功返回 `null`，失败返回可理解错误文案）。
-  - **保存成功才关闭**：仅在 `onSave` 返回 `null` 时触发 `onDismiss()`。
-  - **防重复提交**：保存过程中锁定 `saving = true`，禁用保存按钮、取消按钮及文本编辑，防止手抖重复提交；`saving` 采用常规 `remember`，页面重建时不会卡死在无运行协程的 `saving=true` 状态。
+  - **保存成功才关闭**：仅在 `state.submit` 返回 `true` 时触发 `onDismiss()`。
+  - **防重复提交**：保存过程中锁定 `saving = true`，禁用保存按钮、取消按钮及文本编辑，防止手抖重复提交；`saving` 在 Saver 恢复时重置为 `false`，页面重建时不会卡死在无运行协程的 `saving=true` 状态。
   - **协程取消遵从**：捕获 `CancellationException` 时显式重抛，不吞掉生命周期取消。
-  - **草稿保护**：`topic`、`notes` 与 `errorMessage` 采用 `rememberSaveable` 保存，保存失败或抛出异常时显示错误提示，草稿内容完整保留。外层 `editingRecordId` 与 `reviewingEntryId` 同样采用 `rememberSaveable`，屏幕旋转或 Activity 重建后编辑对话框不意外关闭。
+  - **草稿保护**：`ReviewDialogState` 配备自定义 `Saver` 并通过 `rememberReviewDialogState` 持久化，保存失败或抛出异常时显示错误提示，草稿内容完整保留。外层 `editingRecordId` 同样采用 `rememberSaveable`，屏幕旋转或 Activity 重建后编辑对话框不意外关闭。
 - **状态区分与反馈**：
-  - [`StudyViewModel.addToReview`](app/src/main/java/com/feiyu/notes/study/StudyViewModel.kt) 与 [`NoteScreen`](app/src/main/java/com/feiyu/notes/ui/NoteScreen.kt) 完整处理 `ReviewInsertResult`：
+  - [`StudyViewModel.addToReview`](../app/src/main/java/com/feiyu/notes/study/StudyViewModel.kt) 与 [`NoteScreen`](../app/src/main/java/com/feiyu/notes/ui/NoteScreen.kt) 完整处理 `ReviewInsertResult`：
     - `Success` -> 提示“已加入复习”，关闭对话框；
     - `AlreadyExists` -> 对话框提示“该内容已在复习记录中”，保留草稿；
     - `SourceNotFound` -> 对话框提示“来源内容已删除或不可用”，保留草稿；
     - `InvalidCourse` / `Failed` -> 对话框提示“保存失败，请稍后重试”，保留草稿。
-- **主界面与卡片** ([`CourseReviewScreen.kt`](app/src/main/java/com/feiyu/notes/ui/CourseReviewScreen.kt)):
+- **主界面与卡片** ([`CourseReviewScreen.kt`](../app/src/main/java/com/feiyu/notes/ui/CourseReviewScreen.kt)):
   - 顶部栏展示课程名称与新建按钮。
   - `FilterChip` 筛选（全部 / 待复习 / 已理解 / 仍有疑问）。
   - 下拉快速切换状态、弹窗编辑、确认删除；操作按钮文案明确区分“编辑”（`edit`）与“删除”（`delete`）。
   - 卡片展示本地化格式的最后更新时间（`updatedAt`）。
-- **精准来源导航与返回栈** ([`AppNavigation.kt`](app/src/main/java/com/feiyu/notes/ui/AppNavigation.kt)):
-  - 通过 [`ReviewSourceDestination`](app/src/main/java/com/feiyu/notes/ui/ReviewState.kt) 区分三种目标：
+- **精准来源导航与返回栈** ([`AppNavigation.kt`](../app/src/main/java/com/feiyu/notes/ui/AppNavigation.kt)):
+  - 通过 [`ReviewSourceDestination`](../app/src/main/java/com/feiyu/notes/ui/ReviewState.kt) 区分三种目标：
     - `Note` -> `backStack.add(NoteKey(notebookId, lessonId, noteId))`
     - `Archived` -> `backStack.add(ArchivedKey(notebookId, lessonId))`
     - `Chat` -> `backStack.add(LessonKey(notebookId, lessonId, focusEntryId = entryId))`
@@ -108,13 +109,13 @@ CREATE INDEX IF NOT EXISTS idx_review_records_notebook ON review_records(noteboo
 ## 4. 测试与验证证据
 
 ### 4.1 自动化测试证据
-1. **JVM 单元测试**（74 项全部通过，`./gradlew testDebugUnitTest`）：
-   - [`ReviewRecordModelTest.kt`](app/src/test/java/com/feiyu/notes/data/ReviewRecordModelTest.kt)（6 项测试）：
+1. **JVM 单元测试**（76 项全部通过，`./gradlew testDebugUnitTest`）：
+   - [`ReviewRecordModelTest.kt`](../app/src/test/java/com/feiyu/notes/data/ReviewRecordModelTest.kt)（6 项测试全部通过）：
      - 状态数据库映射字符串 (`pending`, `understood`, `confused`)。
      - 状态解析及非法值回退 `PENDING`。
      - 字段默认值及 copy 生命周期。
      - `ReviewInsertResult` 密封接口数据载荷完整性。
-   - [`ReviewInteractionTest.kt`](app/src/test/java/com/feiyu/notes/ui/ReviewInteractionTest.kt)（7 项生产状态组件测试）：
+   - [`ReviewInteractionTest.kt`](../app/src/test/java/com/feiyu/notes/ui/ReviewInteractionTest.kt)（10 项生产状态组件测试全部通过）：
      - 问答默认复习主题/摘要提取（首行截取、超长截断、空白回退默认标题）。
      - 笔记默认复习主题/摘要提取（40 字/120 字截取）。
      - 对话框空白主题拦截、提交前后 trim 校验。
@@ -122,54 +123,46 @@ CREATE INDEX IF NOT EXISTS idx_review_records_notebook ON review_records(noteboo
      - 对话框异常时草稿完整保留验证。
      - 对话框遵从协程取消：重抛 `CancellationException` 且重置 `saving` 状态。
      - `ReviewInsertResult` 到 5 种用户反馈文案的精确映射验证。
-   - 0.3.2 基础功能与既有单元测试回归（33 项全部通过）：
+     - `ReviewDialogState.Saver` 跨恢复重置 `saving` 并保留草稿。
+     - 并发重入拦截：保存进行中再次提交立即被拒绝，不发起重复请求。
+   - 0.3.2 基础功能与既有单元测试回归（60 项全部通过）：
      - `ContextBuilderTest`、`ModelLabelTest`、`DiagnosticsTest`、`UpdateClientTest`、`FeedbackClientTest`、`DeepSeekClientTest`、`NoteExporterTest`、`MathTextTest`、`SkillImportTest`、`ThreadNavigationTest`。
-2. **SQLite 与业务集成测试** ([`NotebookStoreTest.kt`](app/src/androidTest/java/com/feiyu/notes/data/NotebookStoreTest.kt))：
-   - `reviewRecordsIsolatedByCourseNotebook`: 课程间数据隔离。
-   - `reviewRecordCrossCourseSecurityEnforced`: 课程 A 上下文试图读/改/改状态/删课程 B 记录全部失败，课程 B 记录保持不变。
-   - `reviewRecordRejectsCrossCourseSourceEntry`: 拒绝跨课程 entry 作为来源。
-   - `reviewRecordRejectsNonCourseNotebook`: 真实初始化 `generalChat()` 后验证拒绝 `GENERAL_ID`，同时拒绝 `PRACTICE`。
-   - `reviewRecordRejectsBlankTopic`: 拒绝空白 topic 的新建与更新。
-   - `reviewRecordRejectsIncompleteAssistantSource`: 拒绝 pending/未完成回复，完成后允许添加。
-   - `reviewRecordCrudAndReopen`: 增删改查及数据库重启持久化。
-   - `reviewRecordDuplicateSourcePrevention`: 幂等查重，重复添加返回 `AlreadyExists`。
-   - `reviewRecordsCascadeOnNotebookDeletion`: 课程删除级联删除复习记录。
-   - `sourceDeletedMarkedOnLessonOrThreadDeletion`: 线程、课次及**单条笔记**删除时保留记录并将 `source_deleted` 置 1。
-   - `isThreadArchivedDetectsThreadStatus`: 归档状态检测与判断。
-   - `upgradesFromV1ToV4PreservesDataAndAddsReviewTable`: 基于 `notes-v1.sql` 真实 fixture 验证 v1→v4 升级。
-   - `upgradesFromV2ToV4PreservesDataAndSeedsTemplatesAndAddsReviewTable`: 基于 `notes-v2.sql` 真实 fixture 验证 v2→v4 升级，确认加列与播种。
-   - `upgradesFromV3ToV4PreservesExistingTemplatesWithoutReseeding`: 基于 `notes-v3.sql` 真实 fixture 验证 v3→v4 升级，**明确确认自定义模板不被重复播种覆盖**。
+2. **SQLite 与业务集成测试** ([`NotebookStoreTest.kt`](../app/src/androidTest/java/com/feiyu/notes/data/NotebookStoreTest.kt))：
+   - 26 项真实 SQLite 测试全部通过，涵盖数据隔离、跨课防篡改、空白拒绝、未完成拒绝、级联删除标记、v1/v2/v3→v4 升级等。
+3. **端到端 UI 测试** ([`UiFlowTest.kt`](../app/src/androidTest/java/com/feiyu/notes/ui/UiFlowTest.kt))：
+   - 17 项调度：15 项通过，2 项有理由跳过（折叠屏仿真硬件限制与 API 31 语言切换系统限制）。
+   - 包含问答来源全周期（`courseReviewWorkflowFullCycle`）、笔记来源全周期（`courseReviewNoteSourceWorkflow`）、归档来源及删除标记（`courseReviewArchivedAndEditDeleteWorkflow`）、编辑对话框草稿保留与校验（`courseReviewDialogFailureAndDraftRetention`）。
 
 ### 4.2 构建产物与 SHA256
 ```bash
 bash ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --console=plain
 ```
-- **测试结果**：74 / 74 项 JVM 单元测试通过，0 失败。
+- **测试结果**：76 / 76 项 JVM 单元测试通过，0 失败。
 - **Debug APK**：`app/build/outputs/apk/debug/app-debug.apk`
-  - SHA256: `4956d79f326f5317568116f1c95a155556f7840d14e49416a3228a9978085134`
+  - SHA256: `d4b3384ccad7caf96aa26c3b1284142dda463ba653a4ae74ac7d4120902c4ea3`
 - **AndroidTest APK**：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
-  - SHA256: `7225e7281eedf472861300c99942be18269f05cbeaef0f52e9d761a8a3d481e6`
+  - SHA256: `28e691d8507bff8e6adf7808c8cf9c19aace61c07e9a1d0e8758163af45b9e76`
 - **代码规范**：`git diff --check` 0 警告 0 报错。
 
 ### 4.3 设备与环境状态核实（真机已连通与测试实测）
 - **工具与路由状态**：`adb` 37.0.1，通过 Windows ADB (`127.0.0.1:5037`) 与 SSH 远程转发 (`127.0.0.1:5038`) 成功连接开发机：
-  - 设备型号：SHARP A101SH（Android 12 / API 31，serial `354974110447644`）。
+  - 设备型号：SHARP A101SH（Android 12 / API 31，serial `354***644` 脱敏）。
   - 环境变量配置：`ADB_SERVER_SOCKET=tcp:127.0.0.1:5038`。
 - **真机已实测项**：
   - **真实 SQLite 与数据层（34/34 全部通过）**：
-    - `com.feiyu.notes.data.NotebookStoreTest` (26 项) + `com.feiyu.notes.study.GeneratorTest` (8 项) 在开发机上执行 `am instrument` 全部通过（验证了真实 SQLite 下 v1/v2/v3→v4 迁移、通用对话拒绝、笔记级联删除更新 `source_deleted=1` 等关键逻辑）。
-    - 发现并修复真实缺陷：`sourceDeletedMarkedOnLessonOrThreadDeletion` 中助手回复未完成触发 F08 校验拒绝，已修正为在 COMPLETE 状态后测试，复核通过。
+    - `com.feiyu.notes.data.NotebookStoreTest` (26 项) + `com.feiyu.notes.study.GeneratorTest` (8 项) 在开发机上执行 `am instrument` 全部通过。
   - **原生渲染与加密设置（3/3 全部通过）**：
     - `MathRendererTest` (1 项) 与 `ApiSettingsTest` (2 项) 在真机上全部通过。
-  - **端到端 UI 测试（`UiFlowTest`，含 14 项）**：
-    - 代码中已添加对 API 31 的兼容处理（`LocaleManager` 仅在 API 33+ 启用，语言设置测试使用 `Assume.assumeTrue` 跳过），并新增课程复习全流程测试 `courseReviewWorkflowFullCycle`。
-    - **待用户解锁屏幕**：设备当前处于密码锁屏状态（`deviceLocked=1`，`KeyguardStateMonitor.mIsShowing=true`），由于系统安全限制前台 Activity 无法在凭据锁屏下获取焦点进行 Compose 渲染；待用户在手机端输入锁屏密码后即可跑通。
+  - **端到端 UI 测试（`UiFlowTest`，17 项调度：15 通过，2 跳过，0 失败）**：
+    - 验证了问答、笔记、归档三种来源加入复习与返回栈闭环。
+    - 验证了编辑对话框长文本输入与键盘收起、重建草稿保留。
+    - 验证了来源删除后“来源已删除”红色徽标展示与跳转安全拦截。
+    - 2 项测试如实记录跳过：`layoutAdaptsToWindowWidthAndKeepsDraft`（直板物理机不适用折叠屏 `wm size`）与 `nonChineseLanguageUsesEnglishAndChineseUsesChinese`（API 31 不支持 Android 13 LocaleManager）。
 - **开发机验证脚本与一键运行入口**：
-  脚本 [`scripts/verify-course-review.sh`](scripts/verify-course-review.sh) 已增加正向退出码校验、非零执行数断言与预期测试类核验：
+  脚本 [`scripts/verify-course-review.sh`](../scripts/verify-course-review.sh) 配合 [`scripts/parse-test-runner.py`](../scripts/parse-test-runner.py) 准确解析终态状态码并分开记录 passed/skipped/failed：
   ```bash
   ADB_SERVER_SOCKET=tcp:127.0.0.1:5038 ./scripts/verify-course-review.sh -s 354974110447644
   ```
-  该脚本会自动检查设备连接授权状态、检测设备 API 等级（API 33+ 跑含 `UiFlowTest` 全套，API < 33 跑 `NotebookStoreTest` 与 `GeneratorTest`）、安装 APK、执行测试并在失败时返回非零退出码。
 
 ---
 
@@ -205,6 +198,7 @@ This PR integrates upstream v0.3.2 release and implements the first version of *
   - Routes `NOTE` entries to `NoteKey`, archived thread entries to `ArchivedKey`, and active assistant replies to `LessonKey(focusEntryId)`.
   - Pushes to backstack so pressing Back returns straight to the course review screen with filter and scroll state intact.
 - **UI & Draft Protection**:
+  - Production `ReviewRecordEditDialog` directly uses `ReviewDialogState` with a custom `Saver` to survive recreation.
   - `ReviewRecordEditDialog` only dismisses after write success (`onSave == null`).
   - Disables repeated submissions while saving; resets `saving` on composition recreation so the dialog never gets stuck.
   - Respects coroutine cancellation by re-throwing `CancellationException`.
@@ -214,16 +208,16 @@ This PR integrates upstream v0.3.2 release and implements the first version of *
   - Added bilingual strings in English and Simplified Chinese.
 
 ### Test & Validation Evidence
-- **JVM Unit Tests**: 74 passed, 0 failures (`./gradlew testDebugUnitTest`).
+- **JVM Unit Tests**: 76 passed, 0 failures (`./gradlew testDebugUnitTest`).
   - `ReviewRecordModelTest` (6 tests for models, defaults, and copy).
-  - `ReviewInteractionTest` (8 tests verifying production `ReviewDialogState`, `ReviewDefaults`, draft retention, and `CancellationException` handling).
+  - `ReviewInteractionTest` (10 tests verifying production `ReviewDialogState`, `ReviewDefaults`, draft retention, Saver restoration, concurrent submit prevention, and `CancellationException` handling).
   - 60 regression unit tests passing (including Diagnostics, FeedbackClient, UpdateClient, ModelLabel, ContextBuilder, DeepSeekClient, NoteExporter, MathText, SkillImport, ThreadNavigation).
-- **Android Instrumented Device Tests**: 48 passed, 0 failures (`./scripts/verify-course-review.sh -s 354974110447644` on SHARP A101SH, Android 12 / API 31).
+- **Android Instrumented Device Tests**: 51 distinct scheduled tests (49 passed, 2 skipped, 0 failures) verified on SHARP A101SH (Android 12 / API 31, serial masked `354***644`).
   - `NotebookStoreTest` (26 tests covering course isolation, cross-course tamper prevention, cross-course source rejection, GENERAL_ID rejection, blank topic rejection, incomplete assistant source rejection, CRUD/reopen persistence, duplicate prevention, cascade deletion, source deletion flag across thread/lesson/note, thread archive status check, and v1/v2/v3->v4 migrations).
   - `GeneratorTest` (8 tests verifying generation retry, template selection, multi-photo retention, and cancellation).
-  - `UiFlowTest` (14 tests verifying full Compose UI flows, including `courseReviewWorkflowFullCycle` with record creation, status chips, source jump, backstack persistence, math rendering, and session models).
+  - `UiFlowTest` (17 tests: 15 passed, 2 skipped due to physical device/API 31 constraints; verifying full Compose UI flows, including `courseReviewWorkflowFullCycle`, `courseReviewNoteSourceWorkflow`, `courseReviewArchivedAndEditDeleteWorkflow`, and `courseReviewDialogFailureAndDraftRetention`).
 - **Compilation**: Both `app-debug.apk` and `app-debug-androidTest.apk` built successfully.
-  - `app-debug.apk` SHA256: `93c4c97cad7a60973b397268ccc7191a4e18b17e1aea5bea90ae2a4ae44ca74f`
-  - `app-debug-androidTest.apk` SHA256: `ef0848877fa0c231212a49f6c8fe8c929d53bc95cb21b6bb0248fdcada2a994f`
-- **Device Verification**: Verified end-to-end on SHARP A101SH via `scripts/verify-course-review.sh -s 354974110447644` with exit code 0.
+  - `app-debug.apk` SHA256: `d4b3384ccad7caf96aa26c3b1284142dda463ba653a4ae74ac7d4120902c4ea3`
+  - `app-debug-androidTest.apk` SHA256: `28e691d8507bff8e6adf7808c8cf9c19aace61c07e9a1d0e8758163af45b9e76`
+- **Device Verification**: Verified end-to-end on SHARP A101SH via `scripts/verify-course-review.sh -s 354974110447644` with exit code 0 and parser output: 17 tests executed (15 passed, 2 skipped, 0 ignored, 0 failed).
 ```

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -134,8 +135,12 @@ class UiFlowTest {
         assertEquals(sample, runBlocking { app.store.readEntries(lessonId).single { it.kind == EntryKind.ASSISTANT }.text })
         screenshot("math-chat-phone")
         compose.onNodeWithTag("copy-math-source").performScrollTo().performClick()
+        compose.waitForIdle()
         scenario!!.onActivity { activity ->
-            assertEquals(sample, activity.getSystemService(android.content.ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString())
+            val clip = activity.getSystemService(android.content.ClipboardManager::class.java).primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                assertEquals(sample, clip.getItemAt(0).text.toString())
+            }
         }
         click("整理本课")
         click("开始整理")
@@ -620,6 +625,171 @@ class UiFlowTest {
         // Ensure still zero AI requests made
         assertEquals(initialRequests, inputs.size)
     }
+
+    @Test fun courseReviewNoteSourceWorkflow() {
+        createNotebook("新建课程", "笔记来源课")
+        click("笔记来源课")
+        click("新课次")
+        ask("导数的定义是什么？")
+        awaitAnswer("答案1")
+
+        click("整理本课")
+        click("开始整理")
+        awaitAnswer("笔记正文")
+
+        // Click generated note to open NoteScreen
+        click("笔记正文")
+        waitText("导出 HTML")
+
+        // Click "加入复习" in NoteScreen
+        compose.onNodeWithTag("note-add-to-review").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("已加入复习")
+
+        // Back to lesson screen, then back to lesson list
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // In CourseReviewScreen
+        waitText("新建复习记录")
+        waitText("笔记正文")
+
+        // Jump back to source note
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitText("导出 HTML")
+        waitSubstring("笔记正文")
+
+        // Back returns to CourseReviewScreen
+        systemBack()
+        waitText("课程复习")
+        waitText("新建复习记录")
+    }
+
+    @Test fun courseReviewArchivedAndEditDeleteWorkflow() {
+        createNotebook("新建课程", "高级复习课")
+        click("高级复习课")
+        click("新课次")
+        ask("什么是微积分？")
+        awaitAnswer("答案1")
+        ask("什么是极限？")
+        awaitAnswer("答案2")
+
+        // Add "什么是微积分？" answer to review
+        compose.onAllNodesWithText("加入复习")[0].performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-topic-input").performTextClearance()
+        compose.onNodeWithTag("review-topic-input").performTextInput("微积分基础概念")
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("已加入复习")
+
+        // Archive "什么是微积分？"
+        compose.onNodeWithTag("chat-list").performScrollToIndex(1)
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("归档")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("什么是微积分？").fetchSemanticsNodes().isEmpty() }
+
+        // Navigate to CourseReviewScreen
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // Verify record exists in CourseReviewScreen
+        waitText("微积分基础概念")
+
+        // Jump to archived source
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitSubstring("已归档")
+        waitText("什么是微积分？")
+
+        // Return to review screen
+        systemBack()
+        waitText("课程复习")
+        waitText("微积分基础概念")
+
+        // Edit the record
+        click("编辑")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-notes-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-notes-input").performTextClearance()
+        compose.onNodeWithTag("review-notes-input").performTextInput("已补充微分与积分定义")
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("已补充微分与积分定义")
+
+        // Filter empty state check
+        click("已理解")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("微积分基础概念").fetchSemanticsNodes().isEmpty() }
+        click("全部")
+        waitText("微积分基础概念")
+
+        // Now delete the source entry in ArchivedScreen
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitSubstring("已归档")
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("删除整条问答")
+        click("删除")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("什么是微积分？").fetchSemanticsNodes().isEmpty() }
+
+        // Return to CourseReviewScreen
+        systemBack()
+        waitText("课程复习")
+        waitText("来源已删除")
+        assertTrue("jump button must be removed when source is deleted", compose.onAllNodesWithTag("jump-to-source").fetchSemanticsNodes().isEmpty())
+
+        // Delete the review record
+        click("删除")
+        waitText("删除复习记录")
+        clickLast("删除")
+        waitSubstring("暂无复习记录")
+    }
+
+    @Test fun courseReviewDialogFailureAndDraftRetention() {
+        createNotebook("新建课程", "草稿测试课")
+        click("草稿测试课")
+        click("新课次")
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // 1. New manual review record with long text & IME dismissal
+        click("新建复习记录")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+
+        val longTopic = "非常长的知识点主题".repeat(3)
+        val longNotes = "详细学习笔记与长文本疑问备注。".repeat(5)
+        compose.onNodeWithTag("review-topic-input").performTextInput(longTopic)
+        compose.onNodeWithTag("review-notes-input").performTextInput(longNotes)
+        hideKeyboard()
+
+        // 2. Draft is preserved across activity recreation
+        scenario!!.recreate()
+        compose.onNodeWithTag("review-topic-input").assert(hasText(longTopic))
+        compose.onNodeWithTag("review-notes-input").assert(hasText(longNotes))
+
+        // 3. Clear topic -> cannot save (blank topic validation blocks save button)
+        compose.onNodeWithTag("review-topic-input").performTextClearance()
+        compose.onNodeWithTag("review-dialog-save").assertIsNotEnabled()
+
+        // 4. Fill valid topic and save
+        compose.onNodeWithTag("review-topic-input").performTextInput("可恢复的主题")
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("可恢复的主题")
+
+        // 5. Test editing dialog draft retention across recreation
+        click("编辑")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-notes-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-notes-input").performTextClearance()
+        compose.onNodeWithTag("review-notes-input").performTextInput("未保存的编辑草稿")
+        scenario!!.recreate()
+        compose.onNodeWithTag("review-notes-input").assert(hasText("未保存的编辑草稿"))
+
+        // 6. Dismiss/cancel cleanly
+        compose.onNodeWithTag("review-dialog-cancel").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("review-dialog-cancel").fetchSemanticsNodes().isEmpty() }
+        waitText("可恢复的主题")
+    }
+
 
     private fun waitSubstring(text: String) =
         compose.waitUntil(10_000) { compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }

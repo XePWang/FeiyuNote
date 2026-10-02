@@ -90,10 +90,16 @@ if echo "$DEVICE_LINE" | grep -q "offline"; then
     exit 1
 fi
 
+if [[ ${#SERIAL} -gt 6 ]]; then
+    SERIAL_MASKED="${SERIAL:0:3}***${SERIAL: -3}"
+else
+    SERIAL_MASKED="***"
+fi
+
 DEVICE_API=$("$ADB_BIN" -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')
 DEVICE_MODEL=$("$ADB_BIN" -s "$SERIAL" shell getprop ro.product.model | tr -d '\r')
 DEVICE_MANUF=$("$ADB_BIN" -s "$SERIAL" shell getprop ro.product.manufacturer | tr -d '\r')
-echo "Target device: $DEVICE_MANUF $DEVICE_MODEL (API $DEVICE_API, serial: $SERIAL)"
+echo "Target device: $DEVICE_MANUF $DEVICE_MODEL (API $DEVICE_API, serial: $SERIAL_MASKED)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -124,71 +130,40 @@ else
     TEST_CLASSES="com.feiyu.notes.data.NotebookStoreTest,com.feiyu.notes.study.GeneratorTest,com.feiyu.notes.ui.UiFlowTest"
 fi
 
-OUTPUT_FILE="$PROJECT_ROOT/build/course-review-validation/device-test-$SERIAL.log"
-mkdir -p "$(dirname "$OUTPUT_FILE")"
-
-verify_runner_output() {
-    local log_file="$1"
-    local expected_classes="$2"
-
-    if [[ ! -s "$log_file" ]]; then
-        echo "Error: Test runner output is empty." >&2
-        return 1
-    fi
-
-    if grep -q "FAILURES!!!" "$log_file" || \
-       grep -q "INSTRUMENTATION_FAILED" "$log_file" || \
-       grep -q "shortMsg=Process crashed" "$log_file" || \
-       grep -q "Process crashed" "$log_file" || \
-       grep -q "INSTRUMENTATION_ABORTED" "$log_file" || \
-       grep -E -q "Failures: [1-9][0-9]*" "$log_file" || \
-       grep -E -q "Errors: [1-9][0-9]*" "$log_file"; then
-        echo "Error: Test runner reported failures or crashed." >&2
-        return 1
-    fi
-
-    if ! grep -q "INSTRUMENTATION_CODE: -1" "$log_file"; then
-        echo "Error: Test runner did not complete successfully (missing INSTRUMENTATION_CODE: -1)." >&2
-        return 1
-    fi
-
-    local count
-    count=$(grep -o -E 'OK \([0-9]+ tests?\)' "$log_file" | grep -o -E '[0-9]+' || true)
-    if [[ -z "$count" ]]; then
-        count=$(grep -o -E 'Tests run: [0-9]+' "$log_file" | head -1 | grep -o -E '[0-9]+' || true)
-    fi
-
-    if [[ -z "$count" || "$count" -le 0 ]]; then
-        echo "Error: Zero tests were executed (count='$count')." >&2
-        return 1
-    fi
-
-    IFS=',' read -ra ADDR <<< "$expected_classes"
-    for cls in "${ADDR[@]}"; do
-        cls=$(echo "$cls" | tr -d ' ')
-        if ! grep -q "class=$cls" "$log_file"; then
-            echo "Error: Expected test class '$cls' was not executed by runner." >&2
-            return 1
-        fi
-    done
-
-    echo "Validation passed: $count tests ran and passed across all expected classes ($expected_classes)."
-    return 0
-}
+GIT_SHA=$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "head")
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+CLASS_TAG=$(echo "$TEST_CLASSES" | tr ',' '_' | sed 's/com.feiyu.notes.//g' | tr '.' '_')
+OUTPUT_DIR="$PROJECT_ROOT/build/course-review-validation"
+mkdir -p "$OUTPUT_DIR"
+OUTPUT_FILE="$OUTPUT_DIR/device-test-${SERIAL_MASKED}-${CLASS_TAG}-${GIT_SHA}-${TIMESTAMP}.log"
+DEFAULT_LINK="$OUTPUT_DIR/device-test-${SERIAL_MASKED}.log"
 
 echo "Executing instrumentation tests: $TEST_CLASSES"
 set +e
 "$ADB_BIN" -s "$SERIAL" shell am instrument -w -r \
     -e class "$TEST_CLASSES" \
     com.feiyu.notes.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$OUTPUT_FILE"
+ADB_PIPESTATUS=("${PIPESTATUS[@]}")
 set -e
+ADB_EXIT="${ADB_PIPESTATUS[0]}"
+TEE_EXIT="${ADB_PIPESTATUS[1]}"
 
-if ! verify_runner_output "$OUTPUT_FILE" "$TEST_CLASSES"; then
+# Retain symlink/copy to default path for tooling compatibility
+cp -f "$OUTPUT_FILE" "$DEFAULT_LINK"
+
+if [[ "$ADB_EXIT" -ne 0 ]]; then
+    echo "Warning: adb command exited with non-zero status: $ADB_EXIT" >&2
+fi
+if [[ "$TEE_EXIT" -ne 0 ]]; then
+    echo "Warning: tee command exited with non-zero status: $TEE_EXIT" >&2
+fi
+
+if ! python3 "$SCRIPT_DIR/parse-test-runner.py" --log "$OUTPUT_FILE" --classes "$TEST_CLASSES"; then
     echo "=== Verification Result: FAILED ===" >&2
     echo "See log for details: $OUTPUT_FILE" >&2
     exit 1
 fi
 
 echo "=== Verification Result: SUCCESS ==="
-echo "All targeted instrumented tests passed on device $SERIAL."
+echo "All targeted instrumented tests completed cleanly on device $SERIAL_MASKED."
 echo "Log saved to: $OUTPUT_FILE"
